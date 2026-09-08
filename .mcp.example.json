@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "product-kb": {
+      "type": "stdio",
+      "command": "C:\\PATH\\TO\\product-kb\\.venv\\Scripts\\product-kb-mcp.exe",
+      "args": [],
+      "env": {
+        "PRODUCT_KB_ROOT": "C:\\PATH\\TO\\product-kb",
+        "PYTHONUTF8": "1"
+      }
+    }
+  }
+}

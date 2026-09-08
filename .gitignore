@@ -1,0 +1,10 @@
+.venv/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.index/
+.env
+config/sources.yaml
+.mcp.json
+integration/codex-config-snippet.toml

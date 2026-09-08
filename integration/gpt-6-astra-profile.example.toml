@@ -1,0 +1,6 @@
+# Agent execution profile requested for the formal workflow regression.
+# Apply this in a new Codex task; it does not change the retrieval embedding
+# models configured by product-kb.
+
+model = "gpt-6-astra"
+model_reasoning_effort = "high"

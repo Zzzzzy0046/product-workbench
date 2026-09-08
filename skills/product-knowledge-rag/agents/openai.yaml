@@ -1,0 +1,4 @@
+interface:
+  display_name: "Product Knowledge RAG"
+  short_description: "检索可追溯的出海产品方法、决策、模板、风险与历史案例"
+  default_prompt: "Use $product-knowledge-rag to retrieve relevant methods, decisions, templates, and cases before starting this product task."

@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "product-kb-mcp"
+version = "0.1.0"
+description = "Local-first product knowledge base with hybrid retrieval and a read-only MCP interface."
+requires-python = ">=3.11,<3.14"
+dependencies = [
+  "fastembed==0.8.0",
+  "mcp>=1.20,<2",
+  "pypdf>=5,<7",
+  "pyyaml>=6,<7",
+  "qdrant-client>=1.15,<2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+product-kb = "product_kb.cli:main"
+product-kb-mcp = "product_kb.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/product_kb"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

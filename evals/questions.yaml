@@ -1,0 +1,92 @@
+version: 1
+questions:
+  - id: q01-source-authority
+    query: 当前用户确认和历史模板冲突时应该听谁的？
+    expected_sources: [method-source-authority]
+  - id: q02-current-source-of-truth
+    query: 当前原型与旧需求文档不一致怎么处理？
+    expected_sources: [method-source-authority]
+  - id: q03-evidence-labels
+    query: 事实 推断 假设 决策 风险应该如何区分？
+    expected_sources: [method-evidence-status]
+  - id: q04-validation-level
+    query: 本地 Mock 能不能算真实设备和真实 API 验证？
+    expected_sources: [method-evidence-status]
+  - id: q05-new-product-sequence
+    query: 新品分析从市场用户到最终 Go Hold 的完整顺序是什么？
+    expected_sources: [method-new-product-analysis]
+  - id: q06-heart-writing-style
+    query: Heart Rate 新品文档最值得复用的写法是什么？
+    expected_sources: [case-heart-rate-template-evolution, method-new-product-analysis]
+  - id: q07-template-combination
+    query: Heart Printer Doc Reader 三种模板应该怎么组合而不是互相竞争？
+    expected_sources: [case-heart-rate-template-evolution]
+  - id: q08-g1
+    query: G1 机会门禁要检查什么？
+    expected_sources: [method-workflow-gates, template-a1-opportunity-brief]
+  - id: q09-g2
+    query: 竞品证据如何进入 G2 产品定义门禁？
+    expected_sources: [method-workflow-gates, template-a3-product-definition]
+  - id: q10-g3
+    query: MVP 主流程异常权限什么时候算方案闭环？
+    expected_sources: [method-workflow-gates, pattern-prd-state-closure]
+  - id: q11-g4
+    query: 研发验收门禁如何检查需求原型实现埋点测试的一致性？
+    expected_sources: [method-workflow-gates, template-a7-tracking-qa-acceptance]
+  - id: q12-g5
+    query: 什么情况下才能进入已有产品数据的迭代诊断？
+    expected_sources: [method-workflow-gates, decision-workflow-scope-2026-09-08]
+  - id: q13-paid-acquisition-exclusion
+    query: 这个工作流是否包含付费获客媒体采买和投放归因？
+    expected_sources: [decision-workflow-scope-2026-09-08]
+  - id: q14-store-release-exclusion
+    query: 是否负责 ASO 商店截图 Google Play 上架和灰度发布？
+    expected_sources: [decision-workflow-scope-2026-09-08]
+  - id: q15-policy-retained
+    query: 不做商店发布以后还要不要检查 Google Play 和 App Store 政策？
+    expected_sources: [decision-workflow-scope-2026-09-08]
+  - id: q16-writeback-authorization
+    query: Agent 可以自动把每次聊天写进正式知识库吗？
+    expected_sources: [decision-knowledge-writeback-policy]
+  - id: q17-notion-sync
+    query: 知识候选是否应该自动同步到 Notion？
+    expected_sources: [decision-knowledge-writeback-policy]
+  - id: q18-sensitive-data
+    query: API Key Cookie 未脱敏公司数据能不能进入知识库？
+    expected_sources: [decision-knowledge-writeback-policy]
+  - id: q19-prd-exception-states
+    query: PRD 除正常路径之外必须覆盖哪些异常和恢复状态？
+    expected_sources: [pattern-prd-state-closure, template-a4-prd]
+  - id: q20-prototype-handoff
+    query: 左侧页面效果右侧中文需求和美术标注应该用哪个模板？
+    expected_sources: [template-a5-prototype-handoff]
+  - id: q21-manifest
+    query: 如何记录项目当前阶段 Source of Truth 阻断项和下一步？
+    expected_sources: [template-a0-project-manifest]
+  - id: q22-opportunity-brief
+    query: Beachhead 用户首次价值留存假设和 Kill Criteria 放在哪里？
+    expected_sources: [template-a1-opportunity-brief]
+  - id: q23-competitor-pack
+    query: 竞品商店证据实机路径评论商业化如何做成证据包？
+    expected_sources: [template-a2-competitor-evidence-pack]
+  - id: q24-product-definition
+    query: 产品定位 MVP 现在做后置不做和平台差异如何记录？
+    expected_sources: [template-a3-product-definition]
+  - id: q25-prd-template
+    query: User Story 页面规则状态异常和 Acceptance Criteria 用哪个交付物？
+    expected_sources: [template-a4-prd]
+  - id: q26-risk-decision-log
+    query: 风险假设决策替代方案和 revisit trigger 怎么记录？
+    expected_sources: [template-a6-risk-decision-log]
+  - id: q27-tracking-acceptance
+    query: 埋点 PASS FAIL BLOCKED NOT_RUN 的验收证据怎么处理？
+    expected_sources: [template-a7-tracking-qa-acceptance]
+  - id: q28-monetization-boundary
+    query: 广告和订阅怎样避免破坏读取测量保存等核心任务？
+    expected_sources: [pattern-monetization-task-boundary]
+  - id: q29-reader-first
+    query: PDF Reader 为什么应该 Reader-first 而不是首版做全能文件管理？
+    expected_sources: [case-pdf-reader-product-boundary]
+  - id: q30-android-file-open
+    query: Android 外部打开 PDF 和主动选文件分别使用 ACTION_VIEW 还是 ACTION_OPEN_DOCUMENT？
+    expected_sources: [case-pdf-reader-product-boundary]

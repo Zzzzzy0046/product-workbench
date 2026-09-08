@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.product-kb/schemas/knowledge-entry.schema.json",
+  "title": "Product KB knowledge entry",
+  "type": "object",
+  "required": ["id", "type", "domain", "stage", "evidence_level", "status", "reviewed_at"],
+  "properties": {
+    "id": {"type": "string", "minLength": 3},
+    "type": {
+      "enum": ["source", "method", "pattern", "decision", "case", "template", "risk", "retrospective"]
+    },
+    "domain": {"type": "string"},
+    "product": {"type": "string"},
+    "stage": {"type": "string"},
+    "platform": {
+      "type": "array",
+      "items": {"enum": ["android", "ios", "web", "cross-platform"]},
+      "uniqueItems": true
+    },
+    "region": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "evidence_level": {
+      "enum": ["unverified", "inference", "source-backed", "project-validated", "real-data-validated", "verified-local", "approved-plan", "original-document", "project-document", "installed-skill"]
+    },
+    "status": {"enum": ["draft", "active", "superseded", "archived"]},
+    "source": {"type": "array", "items": {"type": "string"}},
+    "reviewed_at": {"type": "string", "format": "date"},
+    "expires_at": {"type": ["string", "null"], "format": "date"},
+    "supersedes": {"type": "array", "items": {"type": "string"}},
+    "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
+  },
+  "additionalProperties": true
+}

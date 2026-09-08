@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.product-kb/schemas/source-registry.schema.json",
+  "title": "Product KB external source registry",
+  "type": "object",
+  "required": ["version", "allow_roots", "sources"],
+  "properties": {
+    "version": {"const": 1},
+    "allow_roots": {"type": "array", "items": {"type": "string"}},
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "path", "metadata"],
+        "properties": {
+          "id": {"type": "string"},
+          "path": {"type": "string"},
+          "enabled": {"type": "boolean", "default": true},
+          "metadata": {"type": "object"}
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

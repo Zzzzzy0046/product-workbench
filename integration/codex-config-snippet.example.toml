@@ -1,0 +1,13 @@
+# Replace PATH\TO with the local clone path, merge this block into the Codex
+# config, and then start a new session. Running sessions do not gain newly
+# configured MCP tools dynamically.
+
+[mcp_servers.product-kb]
+type = "stdio"
+command = 'C:\PATH\TO\product-kb\.venv\Scripts\product-kb-mcp.exe'
+args = []
+startup_timeout_sec = 120
+
+[mcp_servers.product-kb.env]
+PRODUCT_KB_ROOT = 'C:\PATH\TO\product-kb'
+PYTHONUTF8 = "1"

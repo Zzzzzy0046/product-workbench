@@ -1,0 +1,4 @@
+interface:
+  display_name: "Overseas App Lifecycle"
+  short_description: "编排出海产品从机会判断、PRD到研发验收的完整工作流程"
+  default_prompt: "Use $overseas-consumer-app-lifecycle to identify the current stage, retrieve prior knowledge, and produce the next required product deliverable."

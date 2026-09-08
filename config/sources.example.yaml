@@ -1,0 +1,28 @@
+version: 1
+
+# Copy this file to sources.yaml for local use. sources.yaml is intentionally
+# ignored by Git because it normally contains machine-specific document paths.
+allow_roots: []
+
+# The knowledge/ directory is indexed automatically. Register only external
+# Markdown, TXT, or text-based PDF sources here.
+sources: []
+
+# Example:
+# allow_roots:
+#   - 'C:\PATH\TO\YOUR\PRODUCT-DOCS'
+# sources:
+#   - id: source-heart-rate-research
+#     path: 'C:\PATH\TO\YOUR\PRODUCT-DOCS\heart-rate-research.pdf'
+#     metadata:
+#       title: Heart Rate Research
+#       type: source
+#       product: heart-rate
+#       domain: new-product-analysis
+#       stage: opportunity
+#       platform: [android]
+#       region: [global]
+#       evidence_level: original-document
+#       status: active
+#       reviewed_at: '2026-09-08'
+#       tags: [Heart Rate, research]
