@@ -26,16 +26,16 @@ tags: [A0, Manifest, 交接]
 
 ## 当前状态
 
-- 当前阶段：Initialization / Opportunity / Evidence / Definition / Solution / Build / Acceptance
-- 最近通过的 Gate：
-- 当前结论：Go / Conditional Go / Hold / Stop
+- 当前阶段：Initialization / Evidence / Definition / Solution / Build / Acceptance
+- 最近通过的 Gate：默认从 G2 Definition Gate 开始；如明确要求机会评估，才记录 G1
+- 当前执行状态：Researching / Defining / Building / Acceptance
 - 当前 Source of Truth：
 
 ## 输入与交付物
 
 | 编号 | 交付物 | 路径 | 状态 | 版本 | 负责人 |
 |---|---|---|---|---|---|
-| A1 | Opportunity Brief |  | Missing |  |  |
+| A1 | Opportunity Brief（仅明确要求机会评估时） |  | Optional |  |  |
 | A2 | Competitor Evidence Pack |  | Missing |  |  |
 | A3 | Product Definition |  | Missing |  |  |
 | A4 | PRD |  | Missing |  |  |

@@ -1,0 +1,49 @@
+{
+  "id": "product",
+  "name": "产品工作流",
+  "description": "复用现有新品分析、产品框架、需求与验收模板，按交付物选择任务。",
+  "enabled": true,
+  "tasks": [
+    {
+      "id": "new-product",
+      "name": "完整新品分析",
+      "description": "从背景、用户和竞品到定位、MVP 与执行建议，沿用 Heart Rate 新品分析结构。",
+      "template": "knowledge/templates/t1-new-product-analysis.md",
+      "output": "新品需求分析",
+      "tools": [
+        "project-search",
+        "knowledge-search",
+        "document-parser",
+        "codex"
+      ],
+      "query": "新品需求分析 Heart Rate 市场 用户 竞品 定位 MVP"
+    },
+    {
+      "id": "framework",
+      "name": "产品框架与版本规划",
+      "description": "确定核心流程、功能边界与版本顺序。",
+      "template": "knowledge/templates/t2-product-framework-version-plan.md",
+      "output": "产品框架与版本规划",
+      "tools": ["project-search", "knowledge-search", "codex"],
+      "query": "产品框架 MVP 版本规划"
+    },
+    {
+      "id": "prd",
+      "name": "需求与原型说明",
+      "description": "输出中文需求、页面说明、状态和异常；原型文件另行制作。",
+      "template": "knowledge/templates/t3-prd-prototype-handoff.md",
+      "output": "需求与原型说明",
+      "tools": ["project-search", "knowledge-search", "codex"],
+      "query": "PRD 原型 中文 状态 异常"
+    },
+    {
+      "id": "acceptance",
+      "name": "埋点与验收方案",
+      "description": "整理核心事件、验收条件和测试场景。",
+      "template": "knowledge/templates/t4-tracking-qa-acceptance.md",
+      "output": "埋点与验收方案",
+      "tools": ["project-search", "knowledge-search", "codex"],
+      "query": "埋点 QA 验收"
+    }
+  ]
+}

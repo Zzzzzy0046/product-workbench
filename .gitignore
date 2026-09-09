@@ -8,3 +8,7 @@ __pycache__/
 config/sources.yaml
 .mcp.json
 integration/codex-config-snippet.toml
+workbench/data/
+workbench/.runtime/
+# Business project artifacts stay local; reusable methods/templates are versioned.
+projects/

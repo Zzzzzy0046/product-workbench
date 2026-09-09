@@ -1,8 +1,12 @@
 # Gate definitions
 
-## G1 Opportunity Gate
+## G1 Opportunity Gate（仅在明确要求机会评估时使用）
+
+This is not a default blocking Gate for a product category assigned by the user. Use it only when the user explicitly asks whether an idea is worth doing, wants to screen multiple ideas, or asks to stop before product definition.
 
 Required: specific beachhead user and situation, credible problem cost, reason to start now, first-value moment, natural repeat path, plausible monetisation fit, major policy/technical risk, and falsifiable validation threshold.
+
+For the default assigned-product flow, record these as T1 assumptions, risks, research questions and validation thresholds, then continue to G2 Definition Gate.
 
 ## G2 Definition Gate
 

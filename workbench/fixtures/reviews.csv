@@ -1,0 +1,4 @@
+sample_id,app,review,source_type
+test-001,虚构阅读器,没有网络时打不开已经导入的文档,synthetic-test
+test-002,虚构阅读器,希望记住上次阅读的位置,synthetic-test
+test-003,虚构阅读器,离线阅读很好用但是文件多了不好找,synthetic-test

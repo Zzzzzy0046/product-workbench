@@ -14,7 +14,9 @@ supersedes: []
 tags: [A1, 新品分析, G1]
 ---
 
-# A1 Opportunity Brief
+# A1 Opportunity Brief（可选）
+
+> 仅在用户明确要求机会筛选、比较多个品类，或要求在产品定义前判断“值不值得做”时使用。用户已经指定要做的品类默认跳过本模板，直接进入 T1 / T2。
 
 ## 0. 结论
 

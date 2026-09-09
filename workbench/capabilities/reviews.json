@@ -1,0 +1,22 @@
+{
+  "id": "reviews",
+  "name": "竞品评论分析",
+  "description": "导入评论采集器导出的 CSV，结合项目资料生成可追溯的评论分析。",
+  "enabled": false,
+  "tasks": [
+    {
+      "id": "review-analysis",
+      "name": "竞品评论分析",
+      "description": "分析已导入评论的痛点、场景与需求信号；不自动执行外部爬取。",
+      "template": "workbench/templates/review-analysis.md",
+      "output": "竞品评论分析",
+      "tools": [
+        "document-parser",
+        "project-search",
+        "knowledge-search",
+        "codex"
+      ],
+      "query": "竞品 评论 痛点 用户反馈"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
 name: overseas-consumer-app-lifecycle
-description: Orchestrate overseas consumer-app product work from opportunity assessment through competitor evidence, product definition, PRD, prototype handoff, tracking, QA, and development acceptance. Use for complete new-product workflows, resuming an existing product project, or routing a scoped product task to the correct deliverable and specialist skill. Excludes paid acquisition and app-store publishing execution.
+description: Orchestrate overseas consumer-app product work from assigned-product intake through competitor evidence, product definition, PRD, prototype handoff, tracking, QA, and development acceptance. Use for complete new-product workflows, resuming an existing product project, or routing a scoped product task to the correct deliverable and specialist skill. Opportunity screening is optional. Excludes paid acquisition and app-store publishing execution.
 ---
 
 # Overseas Consumer App Lifecycle
@@ -9,7 +9,7 @@ description: Orchestrate overseas consumer-app product work from opportunity ass
 
 Act as the lifecycle controller. Identify the current stage, recover the project state, retrieve relevant knowledge, select the next deliverable, invoke only the necessary specialist capability, enforce gates, and leave a reviewable handoff.
 
-The user-facing default is **deliverable-first**. For a full new-product request, the primary output is the complete T1 New Product Analysis (0–12 chapters), not an A0/A1 status report. A0–A7 are control and handoff artifacts that support the main deliverable and may be kept concise or internal unless the user asks to inspect them.
+The user-facing default is **deliverable-first**. For a product category explicitly assigned by the user, the primary output is the complete T1 New Product Analysis (0–12 chapters), followed by T2 when the user continues. A0–A7 are control and handoff artifacts that support the main deliverable and may be kept concise or internal unless the user asks to inspect them. The workflow does not re-litigate whether the category should exist.
 
 Do not copy specialist-skill instructions into this controller. Do not expand a local request into the full lifecycle unless the user asks for a full workflow.
 
@@ -23,8 +23,8 @@ Google Play and App Store policy checks remain in scope when they constrain prod
 
 ## Mode selection
 
-- **Full new product (default):** route to `overseas-consumer-app-workflow` and produce the complete T1 New Product Analysis using the historical 0–12 structure. A1/G1 is a conclusion inside that document, not the stopping point. If the direction is weak, complete the analysis, mark `Hold` or `Stop`, and explain the evidence and kill criteria; do not stop after a short A1 unless the user explicitly asked for opportunity-only evaluation.
-- **Opportunity-only evaluation:** produce A1 Opportunity Brief and G1 only when the user explicitly asks to judge an opportunity, screen ideas, or decide whether to research further.
+- **Assigned product (default):** route to `overseas-consumer-app-workflow` and produce the complete T1 New Product Analysis using the historical 0–12 structure. Treat the product category as approved for analysis and execution planning. Record weak evidence as assumptions, risks, validation tasks, scope reductions, or later-stage rejection criteria; do not use a G1 Opportunity Gate to block the workflow.
+- **Opportunity-only evaluation (exception):** produce A1 Opportunity Brief and G1 only when the user explicitly asks to judge an opportunity, screen ideas, or decide whether to research further.
 - **Resume existing project:** read the current Manifest and artifacts; continue from the earliest unresolved dependency.
 - **Scoped task:** produce only the requested artifact or review. List upstream gaps without automatically producing upstream documents.
 - **Existing-product diagnosis:** use only when real product data already exists; do not assume store publication or launch work.
@@ -34,7 +34,7 @@ Google Play and App Store policy checks remain in scope when they constrain prod
 1. Read all user-provided inputs and the current project Manifest if present.
 2. Apply Source of Truth priority: current user confirmation, current source/prototype/real behaviour, current confirmed document, historical knowledge, generic template.
 3. Use `product-knowledge-rag` or the Product KB MCP to retrieve relevant methods, decisions, templates, risks, and similar cases.
-4. Determine mode, current state, target artifact, applicable Gate, missing evidence, and the smallest safe next action. For a full new-product request, target `T1 New Product Analysis` unless the user explicitly requested a later artifact.
+4. Determine mode, current state, target artifact, applicable Gate, missing evidence, and the smallest safe next action. For an assigned product, skip G1 by default and target `T1 New Product Analysis` unless the user explicitly requested a later artifact.
 5. State the routing decision briefly, then execute without asking about non-blocking gaps.
 
 If RAG is unavailable, disclose that and continue from current project evidence. Do not fabricate historical retrieval.
@@ -43,7 +43,6 @@ If RAG is unavailable, disclose that and continue from current project evidence.
 
 ```text
 INITIALIZATION
-  → OPPORTUNITY
   → EVIDENCE
   → DEFINITION
   → SOLUTION
@@ -54,16 +53,27 @@ INITIALIZATION
   → CONTINUE / ITERATE / HOLD / RETIRE
 ```
 
-The state machine controls investment and handoff; it does not truncate the requested analysis. A full T1 may end with `Hold` or `Stop` and still be a complete, useful deliverable.
+The state machine controls evidence and handoff; it does not decide whether a user-assigned category is worth doing. `OPPORTUNITY` may remain as a historical label for source material, but it is not a default blocking Gate. A full T1 ends with an execution recommendation, scope, risks, validation conditions, and the entry requirements for T2.
 
 Read [references/artifact-router.md](references/artifact-router.md) to choose A0–A7 and specialist skills. Read [references/gates.md](references/gates.md) before issuing a Gate result. Read [references/manifest-contract.md](references/manifest-contract.md) when creating, resuming, or handing off a project.
 When T1/A2 needs real competitor review evidence, read [references/competitor-review-collector.md](references/competitor-review-collector.md) and use the local collector only for raw review acquisition and verification.
 
+## Canonical product deliverables
+
+The Product KB is the canonical template source for the four user-facing deliverables:
+
+- T1: `knowledge/templates/t1-new-product-analysis.md` — complete Chinese 0–12 new-product analysis;
+- T2: `knowledge/templates/t2-product-framework-version-plan.md` — product framework and version plan;
+- T3: `knowledge/templates/t3-prd-prototype-handoff.md` — page-level PRD and prototype handoff;
+- T4: `knowledge/templates/t4-tracking-qa-acceptance.md` — tracking, QA and development acceptance.
+
+Use A0–A7 for state, evidence, Gate, risk and traceability. Formal outputs are Chinese by default; retain English only for necessary technical identifiers and UI copy. Do not expand the workflow into paid acquisition, media buying, attribution, ASO, store assets or store publishing execution.
+
 ## Gate behaviour
 
-Do not treat a checklist as proof. A Gate decision must include outcome, evidence, unresolved gaps, owner, return stage, and next minimum action. Allowed outcomes are `Go`, `Conditional Go`, `Hold`, and `Stop`; development acceptance uses `Accepted`, `Conditional`, or `Rejected`.
+Do not treat a checklist as proof. A Gate decision must include outcome, evidence, unresolved gaps, owner, return stage, and next minimum action. For the default assigned-product flow, the first blocking Gate is G2 Definition Gate. G1 remains available only for an explicitly requested opportunity evaluation. Development acceptance uses `Accepted`, `Conditional`, or `Rejected`.
 
-For full T1 delivery, direction failure is recorded in the final decision and used to bound or reject downstream investment; it is not a reason to omit the remaining analysis chapters. Direction failure comes before feature approval and development. Solution failure comes before high-fidelity prototype work. Static inspection cannot pass a device gate, and a local Mock cannot prove a live API or analytics implementation.
+For full T1 delivery, weak direction or missing evidence is recorded as scope, risk, validation work, or a later kill criterion; it is not a reason to block the assigned category at G1. Solution failure comes before high-fidelity prototype work. Static inspection cannot pass a device gate, and a local Mock cannot prove a live API or analytics implementation.
 
 ## Evidence and platform rules
 
@@ -86,7 +96,6 @@ Optional competitor review collection (raw reviews only)
   ↓
 T1 New Product Analysis (0–12)
   ├─ A0 state record (concise)
-  ├─ A1/G1 opportunity conclusion
   ├─ A2 competitor evidence summary
   └─ A3/MVP recommendation
   ↓ only after explicit continuation
@@ -97,7 +106,7 @@ T3 PRD / Prototype Handoff
 T4 Tracking / QA / Acceptance
 ```
 
-Do not expose the user to a controller-only response such as `A0 → A1 → Hold` when the request is for a complete new-product analysis. The correct response is a complete T1 with the Gate conclusion at the end.
+Do not expose the user to a controller-only response such as `A0 → A1 → Hold` when the request is for an assigned product. The correct response is a complete T1 with an execution recommendation and the next T2 entry conditions. Use `A1 → G1` only when the user explicitly requests opportunity screening.
 
 ## Closing sequence
 

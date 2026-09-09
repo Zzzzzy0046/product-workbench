@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>产品工作台</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="mark">P /</span>
+        <div>产品工作台<small>PRODUCT WORKBENCH</small></div>
+      </div>
+      <button class="primary" id="new-project">＋ 新建项目</button>
+      <div class="nav-label">我的项目</div>
+      <nav id="projects" aria-label="项目"></nav>
+      <div class="sidebar-bottom">
+        <button id="capabilities">◈ 能力与工具</button>
+        <div class="local-status"><span></span>本地存储 · 单人工作台</div>
+        <small>让背景留下，让工作继续。</small>
+      </div>
+    </aside>
+    <main>
+      <header>
+        <span id="breadcrumb">工作空间 / 项目</span
+        ><span class="version">本地版 0.1</span>
+      </header>
+      <div id="banner" class="banner" role="status" hidden></div>
+      <section id="content">
+        <div class="empty">正在连接本地工作台…</div>
+      </section>
+    </main>
+    <dialog id="modal">
+      <div class="modal-top">
+        <span id="modal-label">工作台</span
+        ><button id="close-modal" aria-label="关闭">×</button>
+      </div>
+      <div id="modal-body"></div>
+    </dialog>
+    <div id="toast" role="status" hidden></div>
+  </body>
+</html>

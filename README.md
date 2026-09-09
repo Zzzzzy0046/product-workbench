@@ -2,11 +2,28 @@
 
 本项目是出海 C 端产品工作流的本地知识底座：Markdown 是事实源，Qdrant Local 保存生成索引，MCP 向 Codex 和 Claude 提供只读检索。
 
+## 本地产品工作台
+
+已提供可运行的单人工作台：创建项目、维护背景、导入资料、准备任务包、调用 Codex 生成、评审与修订、导出中文 Markdown。
+
+```powershell
+.venv\Scripts\python.exe workbench\app.py
+```
+
+启动后打开 `http://127.0.0.1:8765`。安装、使用方式、扩展机制和明确边界见 [工作台使用手册](workbench/README.md)。工作台当前使用关键词检索；下方 Product KB Hybrid RAG 仍为独立能力。
+
 ## 工作流使用手册
+
+以下手册是完整交付体系的参考；日常在工作台按需选择任务，不必每次跑完全部阶段。
 
 完整的 A0–A7 / T1–T4 交付体系、Gate、跳转规则和项目目录见：
 
 [《出海 C 端新品工作流使用手册》](docs/WORKFLOW-USER-MANUAL.md)
+
+正式产品文档模板位于 `knowledge/templates`：`t1-new-product-analysis.md`、
+`t2-product-framework-version-plan.md`、`t3-prd-prototype-handoff.md`、
+`t4-tracking-qa-acceptance.md`。T1–T4 是面向产品、设计、研发、数据和 QA 的主交付物，
+A0–A7 是状态、证据、Gate、风险和验收追踪层。用户已经指定要做的品类默认跳过 G1 Opportunity Gate，直接进入 T1 → G2 Definition；A1/G1 仅在明确要求机会筛选时启用。
 
 ## 当前范围
 
