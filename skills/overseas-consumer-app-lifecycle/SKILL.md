@@ -9,6 +9,8 @@ description: Orchestrate overseas consumer-app product work from opportunity ass
 
 Act as the lifecycle controller. Identify the current stage, recover the project state, retrieve relevant knowledge, select the next deliverable, invoke only the necessary specialist capability, enforce gates, and leave a reviewable handoff.
 
+The user-facing default is **deliverable-first**. For a full new-product request, the primary output is the complete T1 New Product Analysis (0–12 chapters), not an A0/A1 status report. A0–A7 are control and handoff artifacts that support the main deliverable and may be kept concise or internal unless the user asks to inspect them.
+
 Do not copy specialist-skill instructions into this controller. Do not expand a local request into the full lifecycle unless the user asks for a full workflow.
 
 ## Scope
@@ -21,7 +23,8 @@ Google Play and App Store policy checks remain in scope when they constrain prod
 
 ## Mode selection
 
-- **Full new product:** begin at opportunity unless reliable current-project artifacts prove a later stage is ready.
+- **Full new product (default):** route to `overseas-consumer-app-workflow` and produce the complete T1 New Product Analysis using the historical 0–12 structure. A1/G1 is a conclusion inside that document, not the stopping point. If the direction is weak, complete the analysis, mark `Hold` or `Stop`, and explain the evidence and kill criteria; do not stop after a short A1 unless the user explicitly asked for opportunity-only evaluation.
+- **Opportunity-only evaluation:** produce A1 Opportunity Brief and G1 only when the user explicitly asks to judge an opportunity, screen ideas, or decide whether to research further.
 - **Resume existing project:** read the current Manifest and artifacts; continue from the earliest unresolved dependency.
 - **Scoped task:** produce only the requested artifact or review. List upstream gaps without automatically producing upstream documents.
 - **Existing-product diagnosis:** use only when real product data already exists; do not assume store publication or launch work.
@@ -31,7 +34,7 @@ Google Play and App Store policy checks remain in scope when they constrain prod
 1. Read all user-provided inputs and the current project Manifest if present.
 2. Apply Source of Truth priority: current user confirmation, current source/prototype/real behaviour, current confirmed document, historical knowledge, generic template.
 3. Use `product-knowledge-rag` or the Product KB MCP to retrieve relevant methods, decisions, templates, risks, and similar cases.
-4. Determine mode, current state, target artifact, applicable Gate, missing evidence, and the smallest safe next action.
+4. Determine mode, current state, target artifact, applicable Gate, missing evidence, and the smallest safe next action. For a full new-product request, target `T1 New Product Analysis` unless the user explicitly requested a later artifact.
 5. State the routing decision briefly, then execute without asking about non-blocking gaps.
 
 If RAG is unavailable, disclose that and continue from current project evidence. Do not fabricate historical retrieval.
@@ -51,13 +54,15 @@ INITIALIZATION
   → CONTINUE / ITERATE / HOLD / RETIRE
 ```
 
+The state machine controls investment and handoff; it does not truncate the requested analysis. A full T1 may end with `Hold` or `Stop` and still be a complete, useful deliverable.
+
 Read [references/artifact-router.md](references/artifact-router.md) to choose A0–A7 and specialist skills. Read [references/gates.md](references/gates.md) before issuing a Gate result. Read [references/manifest-contract.md](references/manifest-contract.md) when creating, resuming, or handing off a project.
 
 ## Gate behaviour
 
 Do not treat a checklist as proof. A Gate decision must include outcome, evidence, unresolved gaps, owner, return stage, and next minimum action. Allowed outcomes are `Go`, `Conditional Go`, `Hold`, and `Stop`; development acceptance uses `Accepted`, `Conditional`, or `Rejected`.
 
-Direction failure comes before feature writing. Solution failure comes before high-fidelity prototype work. Static inspection cannot pass a device gate, and a local Mock cannot prove a live API or analytics implementation.
+For full T1 delivery, direction failure is recorded in the final decision and used to bound or reject downstream investment; it is not a reason to omit the remaining analysis chapters. Direction failure comes before feature approval and development. Solution failure comes before high-fidelity prototype work. Static inspection cannot pass a device gate, and a local Mock cannot prove a live API or analytics implementation.
 
 ## Evidence and platform rules
 
@@ -67,9 +72,33 @@ Direction failure comes before feature writing. Solution failure comes before hi
 - Default to Android-first and iOS-secondary only as an initial assumption; reconsider by user, region, device, payment, system capability, policy, and available resources.
 - Preserve source links, dates, regions, platforms, definitions, and evidence levels.
 
+## Deliverable-first routing
+
+Use this default routing for a new product:
+
+```text
+User direction + existing evidence
+  ↓
+Product KB / historical template retrieval
+  ↓
+T1 New Product Analysis (0–12)
+  ├─ A0 state record (concise)
+  ├─ A1/G1 opportunity conclusion
+  ├─ A2 competitor evidence summary
+  └─ A3/MVP recommendation
+  ↓ only after explicit continuation
+T2 Product Framework / Version Plan
+  ↓ only after explicit continuation
+T3 PRD / Prototype Handoff
+  ↓ only after explicit continuation
+T4 Tracking / QA / Acceptance
+```
+
+Do not expose the user to a controller-only response such as `A0 → A1 → Hold` when the request is for a complete new-product analysis. The correct response is a complete T1 with the Gate conclusion at the end.
+
 ## Closing sequence
 
 1. Update or create A0 Manifest with artifact status, Source of Truth, Gate result, blockers, and next action.
-2. Verify that delivered files exist and match the claimed evidence level.
-3. Stop at `ACCEPTED_HANDOFF` unless real product data is already in scope.
+2. Verify that the primary user-facing deliverable exists and matches the claimed evidence level. For a full new-product request, this is the complete T1 document.
+3. Stop after the requested deliverable and Gate result. Do not generate T2/T3/T4 unless the user asks to continue or the task explicitly requests the full downstream lifecycle.
 4. If reusable knowledge emerged, prepare a candidate summary. Do not write it into formal Product KB or Notion without explicit user authorisation.
