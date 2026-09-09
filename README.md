@@ -2,6 +2,12 @@
 
 本项目是出海 C 端产品工作流的本地知识底座：Markdown 是事实源，Qdrant Local 保存生成索引，MCP 向 Codex 和 Claude 提供只读检索。
 
+## 工作流使用手册
+
+完整的 A0–A7 / T1–T4 交付体系、Gate、跳转规则和项目目录见：
+
+[《出海 C 端新品工作流使用手册》](docs/WORKFLOW-USER-MANUAL.md)
+
 ## 当前范围
 
 - 支持 Markdown、TXT 和文本型 PDF。
