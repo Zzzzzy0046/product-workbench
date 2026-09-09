@@ -13,6 +13,7 @@
 
 ## Routing rules
 
+- Canonical names are `A0 Project Manifest` and `A1 Opportunity Brief`; older inventories that used A0/A1 for different documents are historical aliases, not the current contract. Prefer immutable template IDs when resolving ambiguity.
 - A one-page or grammar request remains scoped.
 - “根据 PRD 生成友盟埋点表” routes to `tracking-spec-from-prototype`, not analytics-query tools.
 - Store screenshots do not substitute for authorised device experience.

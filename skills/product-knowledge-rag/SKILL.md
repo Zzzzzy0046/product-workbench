@@ -21,6 +21,8 @@ The Product KB MCP is read-only. Expected tools are `kb_search`, `kb_get`, `kb_t
 6. Use `kb_trace` to verify the original path, fingerprint, date, and locator before presenting a retrieved claim as source-backed.
 7. Return a compact context block: reused knowledge, current applicability, conflicts or staleness, and source IDs.
 
+Default call budget for one scoped product decision: at most 2 `kb_search` calls plus one widened retry, 1 `kb_find_similar_cases`, 6 `kb_get`, and 4 `kb_trace`. Exceed this only for an explicitly requested audit or when the initial results identify a concrete conflict that cannot be resolved inside the budget. Do not fetch every returned chunk.
+
 Read [references/retrieval-contract.md](references/retrieval-contract.md) when composing tool calls or interpreting results. Read [references/governance.md](references/governance.md) when results conflict, may be stale, or could be written back.
 
 ## Source authority

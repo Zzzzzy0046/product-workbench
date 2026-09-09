@@ -12,6 +12,8 @@ Each result includes adjusted score, raw retrieval score, immutable chunk ID, so
 
 Use filters only when the value is known. An incorrect filter is worse than no filter. If a filtered query returns too little, remove the least certain filter once and retry.
 
+For one scoped decision, normally run no more than two distinct searches and one widened retry. Select only the 3–6 results that could change scope, risk, commercialisation, or the Gate; do not call `kb_get` for every search hit.
+
 ## `kb_get`
 
 Use the immutable `chunk_id` returned by search. Fetch before relying on a truncated or high-impact result.
@@ -23,6 +25,15 @@ Input `source_id`. It returns the source path, current fingerprint, metadata, an
 ## `kb_find_similar_cases`
 
 Searches only `type: case`. Use it for analogy, failure patterns, template evolution, and comparable product boundaries. A case is supportive evidence, not proof that the same decision applies now.
+
+## Default call budget
+
+- `kb_search`: 2 decision queries plus 1 widened retry.
+- `kb_find_similar_cases`: 1 call.
+- `kb_get`: up to 6 selected chunks.
+- `kb_trace`: up to 4 decision-critical sources.
+
+An explicit knowledge audit may exceed the budget. A normal product task may exceed it only to resolve a concrete conflict found by the initial retrieval, and the final context block must state why.
 
 ## Query examples
 

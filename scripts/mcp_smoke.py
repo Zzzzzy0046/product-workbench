@@ -13,6 +13,24 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / ".venv" / "Scripts" / "product-kb-mcp.exe"
 
 
+def _result_payload(result):
+    structured = getattr(result, "structuredContent", None) or getattr(
+        result, "structured_content", None
+    )
+    payload = structured.get("result") if isinstance(structured, dict) else None
+    if payload is not None:
+        return payload
+    for item in result.content:
+        item_text = getattr(item, "text", "")
+        if not item_text:
+            continue
+        try:
+            return json.loads(item_text)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 async def run() -> dict[str, object]:
     params = StdioServerParameters(
         command=str(SERVER),
@@ -41,6 +59,20 @@ async def run() -> dict[str, object]:
             serialised = "\n".join(getattr(item, "text", "") for item in result.content)
             if "case-heart-rate-template-evolution" not in serialised:
                 raise AssertionError(f"Expected Heart Rate case was not returned: {serialised[:500]}")
+            search_results = _result_payload(result)
+            if not isinstance(search_results, list) or not search_results:
+                raise AssertionError(f"kb_search returned no structured results: {serialised[:500]}")
+            first_chunk_id = search_results[0].get("chunk_id")
+            get_result = await session.call_tool(
+                "kb_get", arguments={"chunk_id": first_chunk_id}
+            )
+            if get_result.isError:
+                raise AssertionError(f"kb_get returned an error: {get_result.content}")
+            fetched = _result_payload(get_result)
+            if not isinstance(fetched, dict) or fetched.get("chunk_id") != first_chunk_id:
+                raise AssertionError(
+                    f"Search/get round trip failed for {first_chunk_id}: {get_result.content}"
+                )
 
             case_result = await session.call_tool(
                 "kb_find_similar_cases",
@@ -50,25 +82,10 @@ async def run() -> dict[str, object]:
                 raise AssertionError(
                     f"kb_find_similar_cases returned an error: {case_result.content}"
                 )
-            structured = getattr(case_result, "structuredContent", None) or getattr(
-                case_result, "structured_content", None
-            )
-            cases = structured.get("result") if isinstance(structured, dict) else None
+            cases = _result_payload(case_result)
             case_text = "\n".join(getattr(item, "text", "") for item in case_result.content)
             if not isinstance(cases, list):
                 cases = []
-                for item in case_result.content:
-                    item_text = getattr(item, "text", "")
-                    if not item_text:
-                        continue
-                    try:
-                        decoded = json.loads(item_text)
-                    except json.JSONDecodeError:
-                        continue
-                    if isinstance(decoded, list):
-                        cases.extend(decoded)
-                    elif isinstance(decoded, dict):
-                        cases.append(decoded)
             if not cases or any(item.get("type") != "case" for item in cases):
                 returned_types = [item.get("type") for item in cases]
                 raise AssertionError(
@@ -78,6 +95,7 @@ async def run() -> dict[str, object]:
             return {
                 "tools": tool_names,
                 "search_hit": "case-heart-rate-template-evolution",
+                "search_get_round_trip": True,
                 "similar_cases_only": True,
                 "similar_case_count": len(cases),
             }
