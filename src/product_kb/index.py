@@ -219,6 +219,20 @@ class HybridIndex:
                 terms.update(sequence[index : index + width] for index in range(len(sequence) - width + 1))
         return terms
 
+    @staticmethod
+    def _payload_matches_filters(
+        payload: dict[str, Any], filters: dict[str, Any] | None
+    ) -> bool:
+        for key, expected in (filters or {}).items():
+            if expected in (None, "", []):
+                continue
+            expected_values = expected if isinstance(expected, list) else [expected]
+            actual = payload.get(key)
+            actual_values = actual if isinstance(actual, list) else [actual]
+            if not any(value in actual_values for value in expected_values):
+                return False
+        return True
+
     def _rerank(self, query: str, points: list[Any], top_k: int) -> list[dict[str, Any]]:
         query_terms = self._terms(query)
         ranked: list[dict[str, Any]] = []
@@ -264,24 +278,22 @@ class HybridIndex:
                 break
         return diversified
 
-    def _curated_points(self) -> list[Any]:
+    def _curated_points(self, filters: dict[str, Any] | None = None) -> list[Any]:
         points: list[Any] = []
         offset: Any = None
+        active_filter = self._filter(filters)
+        curated_filter = models.Filter(
+            must=active_filter.must,
+            must_not=[
+                models.FieldCondition(
+                    key="type", match=models.MatchValue(value="source")
+                )
+            ],
+        )
         while True:
             batch, offset = self.client.scroll(
                 collection_name=self.settings.collection_name,
-                scroll_filter=models.Filter(
-                    must=[
-                        models.FieldCondition(
-                            key="status", match=models.MatchValue(value="active")
-                        )
-                    ],
-                    must_not=[
-                        models.FieldCondition(
-                            key="type", match=models.MatchValue(value="source")
-                        )
-                    ],
-                ),
+                scroll_filter=curated_filter,
                 limit=256,
                 offset=offset,
                 with_payload=True,
@@ -321,9 +333,14 @@ class HybridIndex:
             with_payload=True,
         )
         combined: dict[str, Any] = {str(point.id): point for point in response.points}
-        for point in self._curated_points():
+        for point in self._curated_points(filters):
             combined.setdefault(str(point.id), point)
-        return self._rerank(query, list(combined.values()), max(1, min(top_k, 50)))
+        filtered_points = [
+            point
+            for point in combined.values()
+            if self._payload_matches_filters(point.payload or {}, filters)
+        ]
+        return self._rerank(query, filtered_points, max(1, min(top_k, 50)))
 
     def get_chunk(self, chunk_id: str) -> dict[str, Any] | None:
         if not self._collection_exists():

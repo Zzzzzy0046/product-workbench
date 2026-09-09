@@ -13,7 +13,7 @@ From weaker to stronger: unverified, inference, source-backed, project-validated
 
 ## Freshness
 
-Check `reviewed_at` and `expires_at`. Current market, competitor, price, platform policy, SDK capability, and regulation claims must be refreshed rather than repeated from old knowledge.
+`reviewed_at` records when the knowledge entry was checked; it does not make every fact in the source current. Check `source_observed_at`, `fact_valid_through`, `requires_live_refresh`, and `expires_at` separately. Current user, market, competitor, price, platform policy, SDK capability, and regulation claims must be refreshed rather than repeated from old knowledge. Missing validity fields are uncertainty, not proof of freshness.
 
 ## Conflicts
 

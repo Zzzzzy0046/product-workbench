@@ -40,9 +40,8 @@ Claude 项目配置参考 `.mcp.example.json`；Codex 配置参考
 `integration/codex-config-snippet.example.toml`。复制为本地配置后，把
 `C:\\PATH\\TO\\product-kb` 替换成实际克隆目录。
 
-正式工作流回归的目标 Agent 模型是 `gpt-6-astra`；示例位于
-`integration/gpt-6-astra-profile.example.toml`。Agent 模型与本项目的本地
-embedding 模型是两套独立配置，切换 Agent 模型不会重建检索索引。
+工作流使用任务当前选择的 Agent 模型，不锁定特定型号。Agent 模型与本项目的
+本地 embedding 模型是两套独立配置，切换 Agent 模型不会重建检索索引。
 
 ## 只读工具
 
@@ -57,8 +56,19 @@ embedding 模型是两套独立配置，切换 Agent 模型不会重建检索索
 2. 结构化知识放入 `knowledge` 的正式目录并使用 YAML frontmatter。
 3. 待审核内容放入 `knowledge/00_inbox`，不会进入索引。
 4. 用户明确授权沉淀后，再移动候选知识并运行增量 `index`。
-5. 政策、价格和平台能力类知识必须设置复核时间，必要时设置 `expires_at`。
+5. `reviewed_at` 只表示知识条目被检查的时间，不代表其中的市场事实仍然有效。
+6. 用户、市场、竞品、价格、政策和平台能力类资料应同时维护
+   `source_observed_at`、`fact_valid_through` 和 `requires_live_refresh`。
+7. 更新索引后重启正在运行的 MCP 客户端，使其重新读取只读运行时快照。
 
 ## 验证
 
 `product-kb eval` 会运行 `evals/questions.yaml` 中的 30 个真实检索问题。第一版验收要求：全部问题至少在 Top 5 命中一个预期来源，并能通过 `kb_trace` 回溯原文。
+
+```powershell
+.venv\Scripts\python.exe -m pytest -q
+.venv\Scripts\python.exe scripts\mcp_smoke.py
+.venv\Scripts\python.exe scripts\mcp_concurrency_smoke.py
+```
+
+并发冒烟会同时启动 3 个 MCP 进程，验证多个 Codex 任务读取同一份知识库时不会争用 Qdrant Local 的 canonical index。

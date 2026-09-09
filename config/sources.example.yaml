@@ -25,4 +25,7 @@ sources: []
 #       evidence_level: original-document
 #       status: active
 #       reviewed_at: '2026-09-08'
+#       source_observed_at: null
+#       fact_valid_through: null
+#       requires_live_refresh: true
 #       tags: [Heart Rate, research]

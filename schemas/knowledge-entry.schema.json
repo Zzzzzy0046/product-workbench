@@ -25,6 +25,9 @@
     "source": {"type": "array", "items": {"type": "string"}},
     "reviewed_at": {"type": "string", "format": "date"},
     "expires_at": {"type": ["string", "null"], "format": "date"},
+    "source_observed_at": {"type": ["string", "null"], "format": "date"},
+    "fact_valid_through": {"type": ["string", "null"], "format": "date"},
+    "requires_live_refresh": {"type": "boolean"},
     "supersedes": {"type": "array", "items": {"type": "string"}},
     "tags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
   },
