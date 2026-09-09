@@ -57,6 +57,7 @@ INITIALIZATION
 The state machine controls investment and handoff; it does not truncate the requested analysis. A full T1 may end with `Hold` or `Stop` and still be a complete, useful deliverable.
 
 Read [references/artifact-router.md](references/artifact-router.md) to choose A0–A7 and specialist skills. Read [references/gates.md](references/gates.md) before issuing a Gate result. Read [references/manifest-contract.md](references/manifest-contract.md) when creating, resuming, or handing off a project.
+When T1/A2 needs real competitor review evidence, read [references/competitor-review-collector.md](references/competitor-review-collector.md) and use the local collector only for raw review acquisition and verification.
 
 ## Gate behaviour
 
@@ -80,6 +81,8 @@ Use this default routing for a new product:
 User direction + existing evidence
   ↓
 Product KB / historical template retrieval
+  ↓
+Optional competitor review collection (raw reviews only)
   ↓
 T1 New Product Analysis (0–12)
   ├─ A0 state record (concise)
