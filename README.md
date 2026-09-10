@@ -4,7 +4,7 @@
 
 ## 本地产品工作台
 
-已提供可运行的单人工作台：创建项目、维护背景、导入资料、准备任务包、调用 Codex 生成、评审与修订、导出中文 Markdown。
+已提供可运行的单人工作台：创建项目、导入文档和截图、准备三类快速交付物、调用 Codex 生成、评审与修订、导出中文 Markdown。
 
 ```powershell
 .venv\Scripts\python.exe workbench\app.py
@@ -14,20 +14,17 @@
 
 ## 工作流使用手册
 
-以下手册是完整交付体系的参考；日常在工作台按需选择任务，不必每次跑完全部阶段。
+日常新品默认走三段快速路径：F1 新品需求分析、F2 核心 PRD、F3 开发验收清单。F1 保留 Heart Rate 式完整产品分析结构，不再是简短定义卡；竞品评论 CSV、政策来源、技术日志、截图和研究资料直接进入对应文档。流程不默认生成用户访谈、假设验证、风险清单、技术 Spike、Gate 或条件闭环。
 
-完整的 A0–A7 / T1–T4 交付体系、Gate、跳转规则和项目目录见：
+完整使用方式、资料规则和历史正式模式见：
 
 [《出海 C 端新品工作流使用手册》](docs/WORKFLOW-USER-MANUAL.md)
 
-正式产品文档模板位于 `knowledge/templates`：`t1-new-product-analysis.md`、
-`t2-product-framework-version-plan.md`、`t3-prd-prototype-handoff.md`、
-`t4-tracking-qa-acceptance.md`。T1–T4 是面向产品、设计、研发、数据和 QA 的主交付物，
-A0–A7 是状态、证据、Gate、风险和验收追踪层。用户已经指定要做的品类默认跳过 G1 Opportunity Gate，直接进入 T1 → G2 Definition；A1/G1 仅在明确要求机会筛选时启用。
+正式模板位于 `knowledge/templates`。快速路径使用 `f1-new-product-analysis.md`、`f2-core-prd.md` 和 `f3-development-acceptance.md`。历史 T1–T4 仅在明确要求 0–12 章正式研究或大型跨团队材料时按文件路径使用，不参与默认 RAG 检索。
 
 ## 当前范围
 
-- 支持 Markdown、TXT 和文本型 PDF。
+- 工作台支持 Markdown、TXT、CSV、JSON、文本型 PDF、DOCX 和 PNG/JPG/WEBP 截图。
 - 支持 dense + sparse Hybrid Search 与 metadata filter。
 - 支持外部来源白名单、增量指纹和来源追踪。
 - 正式检索默认只返回 `status: active` 的知识。

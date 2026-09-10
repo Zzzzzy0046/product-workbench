@@ -6,15 +6,17 @@ stage: solution
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: archived
 source: [source-historical-workflow-v1]
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
-tags: [A4, PRD, AC, 状态]
+tags: [A4, PRD, AC, 状态, 历史正式模式, formal-only]
 ---
 
 # A4 PRD
+
+> 历史 PRD 模板，不参与默认检索。当前快速流程统一使用 F2 核心 PRD。
 
 ## 文档信息
 

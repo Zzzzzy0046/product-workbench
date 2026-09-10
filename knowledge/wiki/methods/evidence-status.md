@@ -9,13 +9,15 @@ evidence_level: project-validated
 status: active
 source:
   - source-historical-workflow-v1
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
-tags: [事实, 推断, 假设, 验证]
+tags: [证据治理, 来源追溯, 内部方法, formal-only]
 ---
 
 # 证据状态
+
+本方法用于内部研究判断和正式研究模式。快速 F1/F2/F3 的正式交付物不显示 `[事实]`、`[推断]`、`[假设]`、`[风险]` 或验证标签；正文直接写产品结论，并通过资料索引、链接、文件名和日期保留来源。只有用户明确要求研究过程或证据状态时，才在交付物中显示这些标签。
 
 - `[事实]`：有可追溯的来源、数据、原型或真实行为。
 - `[推断]`：由事实推导，必须写清推导链。

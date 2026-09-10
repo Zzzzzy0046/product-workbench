@@ -17,6 +17,7 @@
       <div class="nav-label">我的项目</div>
       <nav id="projects" aria-label="项目"></nav>
       <div class="sidebar-bottom">
+        <button id="trash">♲ 项目回收站</button>
         <button id="capabilities">◈ 能力与工具</button>
         <div class="local-status"><span></span>本地存储 · 单人工作台</div>
         <small>让背景留下，让工作继续。</small>
@@ -25,14 +26,14 @@
     <main>
       <header>
         <span id="breadcrumb">工作空间 / 项目</span
-        ><span class="version">本地版 0.1</span>
+        ><span class="version">本地版 0.7</span>
       </header>
       <div id="banner" class="banner" role="status" hidden></div>
       <section id="content">
         <div class="empty">正在连接本地工作台…</div>
       </section>
     </main>
-    <dialog id="modal">
+    <dialog id="modal" aria-labelledby="modal-label">
       <div class="modal-top">
         <span id="modal-label">工作台</span
         ><button id="close-modal" aria-label="关闭">×</button>

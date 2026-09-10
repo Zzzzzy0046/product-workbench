@@ -1,7 +1,7 @@
 {
   "id": "reviews",
   "name": "竞品评论分析",
-  "description": "导入评论采集器导出的 CSV，结合项目资料生成可追溯的评论分析。",
+  "description": "可选：评论量很大时先单独分析；普通项目直接把 CSV 指定给 F1 新品需求分析。",
   "enabled": false,
   "tasks": [
     {
@@ -17,6 +17,7 @@
         "codex"
       ],
       "query": "竞品 评论 痛点 用户反馈"
+      ,"modes": ["full"]
     }
   ]
 }

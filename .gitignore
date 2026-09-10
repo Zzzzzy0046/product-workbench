@@ -10,5 +10,8 @@ config/sources.yaml
 integration/codex-config-snippet.toml
 workbench/data/
 workbench/.runtime/
+workbench/backups/
+tmp/
+audit/
 # Business project artifacts stay local; reusable methods/templates are versioned.
 projects/

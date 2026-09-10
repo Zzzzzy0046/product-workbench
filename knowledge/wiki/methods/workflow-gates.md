@@ -9,18 +9,24 @@ evidence_level: approved-plan
 status: active
 source:
   - source-workflow-implementation-v1
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
-tags: [Gate, G1-optional, G2, G3, G4, G5]
+tags: [Gate, formal-only, G1, G2, G3, G4, G5]
 ---
 
 # 工作流 Gate
 
-- G1 机会门禁（可选）：仅在用户明确要求机会筛选时，判断用户、场景、痛点、首次价值和继续投入的理由是否成立。
-- G2 定义门禁（默认首个阻断 Gate）：竞品证据能否导出定位、差异化、留存和商业化决策。
-- G3 方案门禁：MVP、主流程、状态、异常、权限、风险和验收是否闭环。
-- G4 研发验收门禁：需求、原型、实现、埋点和测试是否一致，真机核心路径是否通过。
-- G5 迭代门禁：仅在已有真实产品数据时判断 Continue、Iterate、Hold 或 Retire。
+默认快速流程不使用 Gate、风险清单或条件闭环。F1 新品分析完成后直接进入 F2 核心 PRD；F3 用实际结果、日志、截图和复测记录开发验收。
 
-默认新品流程不以 G1 阻断；证据缺口在 T1 中记录为假设、风险、验证任务、范围收窄条件或后续 Kill Criteria。G1 被明确启用时，其输出为 `Go / Conditional Go / Hold / Stop`；G2–G5 按各自 Gate 定义记录结果、负责人、补证方式和返回阶段。
+只有用户明确要求正式机会判断、阶段评审或历史完整流程时才使用：
+
+- G1：机会判断；
+- G2：正式产品定义评审；
+- G3：正式方案评审；
+- G4：基于真实构建和测试证据的研发验收；
+- G5：已有真实产品数据后的迭代判断。
+
+计划文档不能证明真实实现已经通过。这个证据原则仍适用于快速模式，但不需要生成 Gate 文档。
+
+正式 G3 的方案闭环至少包含：有边界的 MVP、完整主流程、Loading/Empty/Error 等相关异常、权限和数据规则，以及可执行验收标准。

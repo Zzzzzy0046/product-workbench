@@ -130,6 +130,24 @@ class HybridIndex:
             wait=True,
         )
 
+    def _all_point_ids(self) -> list[str]:
+        if not self._collection_exists():
+            return []
+        point_ids: list[str] = []
+        offset: Any = None
+        while True:
+            batch, offset = self.client.scroll(
+                collection_name=self.settings.collection_name,
+                limit=256,
+                offset=offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            point_ids.extend(str(point.id) for point in batch)
+            if offset is None:
+                break
+        return point_ids
+
     def build(self, reset: bool = False) -> dict[str, Any]:
         if reset:
             self.reset()
@@ -147,6 +165,7 @@ class HybridIndex:
             "indexed_sources": 0,
             "skipped_sources": 0,
             "removed_sources": 0,
+            "removed_chunks": 0,
             "indexed_chunks": 0,
             "errors": [],
         }
@@ -185,6 +204,15 @@ class HybridIndex:
             except Exception as exc:  # keep other sources indexable and report the exact source
                 report["errors"].append({"source_id": source_id, "error": str(exc)})
 
+        active_chunk_ids = {
+            chunk_id
+            for source in previous.values()
+            for chunk_id in source.get("chunk_ids", [])
+        }
+        stale_chunk_ids = sorted(set(self._all_point_ids()) - active_chunk_ids)
+        self._delete_points(stale_chunk_ids)
+        report["removed_chunks"] = len(stale_chunk_ids)
+
         manifest = {"version": 1, "models": model_settings, "sources": previous}
         self._write_manifest(manifest)
         report["total_sources"] = len(previous)
@@ -218,6 +246,10 @@ class HybridIndex:
             for width in (2, 3, 4):
                 terms.update(sequence[index : index + width] for index in range(len(sequence) - width + 1))
         return terms
+
+    @staticmethod
+    def _is_active(payload: dict[str, Any]) -> bool:
+        return payload.get("status") == "active"
 
     @staticmethod
     def _payload_matches_filters(
@@ -338,7 +370,8 @@ class HybridIndex:
         filtered_points = [
             point
             for point in combined.values()
-            if self._payload_matches_filters(point.payload or {}, filters)
+            if self._is_active(point.payload or {})
+            and self._payload_matches_filters(point.payload or {}, filters)
         ]
         return self._rerank(query, filtered_points, max(1, min(top_k, 50)))
 

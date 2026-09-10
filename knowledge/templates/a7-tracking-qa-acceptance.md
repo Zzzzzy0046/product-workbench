@@ -6,15 +6,17 @@ stage: acceptance
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: archived
 source: [source-historical-workflow-v1]
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
-tags: [A7, 埋点, QA, 真机, G4]
+tags: [A7, 埋点, QA, 真机, G4, 历史正式模式, formal-only]
 ---
 
 # A7 Tracking / QA / Acceptance Pack
+
+> 历史组合模板，不参与默认检索。当前开发验收使用 F3；需要正式友盟埋点表时，按指定埋点格式单独生成，不复用本模板。
 
 ## 埋点设计
 

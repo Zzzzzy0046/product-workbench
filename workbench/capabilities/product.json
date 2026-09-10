@@ -1,7 +1,7 @@
 {
   "id": "product",
-  "name": "产品工作流",
-  "description": "复用现有新品分析、产品框架、需求与验收模板，按交付物选择任务。",
+  "name": "历史正式研究模式",
+  "description": "仅在明确要求 0–12 章正式研究或大型跨团队材料时使用历史 T1–T4；日常新品默认使用快速迭代路径。",
   "enabled": true,
   "tasks": [
     {
@@ -17,6 +17,7 @@
         "codex"
       ],
       "query": "新品需求分析 Heart Rate 市场 用户 竞品 定位 MVP"
+      ,"modes": ["full"]
     },
     {
       "id": "framework",
@@ -26,6 +27,8 @@
       "output": "产品框架与版本规划",
       "tools": ["project-search", "knowledge-search", "codex"],
       "query": "产品框架 MVP 版本规划"
+      ,"recommended_upstream": "product/new-product"
+      ,"modes": ["full"]
     },
     {
       "id": "prd",
@@ -35,6 +38,8 @@
       "output": "需求与原型说明",
       "tools": ["project-search", "knowledge-search", "codex"],
       "query": "PRD 原型 中文 状态 异常"
+      ,"recommended_upstream": "product/framework"
+      ,"modes": ["full"]
     },
     {
       "id": "acceptance",
@@ -44,6 +49,32 @@
       "output": "埋点与验收方案",
       "tools": ["project-search", "knowledge-search", "codex"],
       "query": "埋点 QA 验收"
+      ,"modes": ["full"],
+      "hidden": true
+    },
+    {
+      "id": "acceptance-plan",
+      "name": "F3 开发验收清单（正式模式可选）",
+      "description": "在同一份清单中记录开发前预期与开发后实测、证据、修改和复测。",
+      "template": "knowledge/templates/f3-development-acceptance.md",
+      "output": "F3 开发验收清单",
+      "tools": ["project-search", "knowledge-search", "codex"],
+      "query": "开发验收 QA 实测 日志 截图 复测",
+      "recommended_upstream": "product/prd",
+      "review_policy": "acceptance",
+      "modes": ["full"]
+    },
+    {
+      "id": "acceptance-run",
+      "name": "T4 真实构建验收",
+      "description": "基于构建、设备、日志和录像记录真实结果，给出 Accepted、Conditional 或 Rejected。",
+      "template": "knowledge/templates/t4-acceptance-run.md",
+      "output": "T4 真实构建验收记录",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "真实构建 设备 日志 录像 复测 验收",
+      "review_policy": "acceptance",
+      "modes": ["full"],
+      "hidden": true
     }
   ]
 }

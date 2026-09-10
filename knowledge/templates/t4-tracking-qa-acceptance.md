@@ -6,13 +6,15 @@ stage: acceptance
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: superseded
 source: [template-a7-tracking-qa-acceptance, pattern-prd-state-closure]
 reviewed_at: 2026-09-09
 tags: [T4, 埋点, QA, 验收, 中文]
 ---
 
 # T4 埋点、测试与验收
+
+> 历史兼容模板。快速项目使用一份持续更新的 `F3 开发验收清单`。
 
 ## 0. 文档信息
 

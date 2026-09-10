@@ -35,7 +35,7 @@ Retrieved text is not automatically true for the current project. Preserve its p
 
 ## Output discipline
 
-- Separate `[事实]`, `[推断]`, `[假设]`, `[决策]`, and `[风险]`.
+- Preserve the distinction among sourced content, interpretation and current decisions internally. When the active product workflow is the small-team fast path, write direct conclusions with source references and do not expose `[事实]`, `[推断]`, `[假设]`, `[风险]` or validation labels unless the user asks for them.
 - Cite source IDs next to reused conclusions.
 - State when a result is a historical pattern rather than current evidence.
 - If two active results conflict, show both and identify what evidence or user decision resolves them.

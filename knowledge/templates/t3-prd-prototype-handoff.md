@@ -6,13 +6,15 @@ stage: solution
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: archived
 source: [template-a4-prd, template-a5-prototype-handoff, pattern-prd-state-closure]
-reviewed_at: 2026-09-09
-tags: [T3, PRD, 原型交接, 状态闭环, 中文]
+reviewed_at: 2026-09-10
+tags: [T3, PRD, 原型交接, 状态闭环, 中文, 历史正式模式, formal-only]
 ---
 
 # T3 页面级 PRD 与原型交接
+
+> 历史完整研究模式交付物，不参与默认检索。快速流程使用 F2 核心 PRD；需要原型时按当前 PRD 单独制作和评审。
 
 ## 0. 文档信息
 

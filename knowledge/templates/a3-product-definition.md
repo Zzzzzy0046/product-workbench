@@ -6,15 +6,17 @@ stage: definition
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: archived
 source: [source-template-audit-v1]
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
-tags: [A3, 定位, MVP, G2]
+tags: [A3, 定位, MVP, G2, 历史正式模式, formal-only]
 ---
 
 # A3 Product Definition
+
+> 历史正式模式模板，不参与默认检索。当前产品定位、范围和版本边界写入 F1，新一轮可实现需求写入 F2。
 
 ## 1. 产品定位
 

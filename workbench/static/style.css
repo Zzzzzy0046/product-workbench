@@ -49,7 +49,16 @@ button:hover {
 }
 button:disabled {
   opacity: 0.5;
-  cursor: wait;
+  cursor: not-allowed;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #d18361;
+  outline-offset: 3px;
 }
 button.primary,
 .primary {
@@ -59,6 +68,14 @@ button.primary,
 }
 button.primary:hover {
   background: #a94a31;
+}
+button.danger {
+  background: #9f3f32;
+  border-color: #9f3f32;
+  color: white;
+}
+button.danger:hover {
+  background: #873329;
 }
 button.small {
   padding: 6px 12px;
@@ -351,12 +368,12 @@ header {
   font-weight: 400;
 }
 .tag.warn {
-  background: #faead9;
-  color: #956138;
+  background: #f3dfc8;
+  color: #74451f;
 }
 .tag.bad {
-  background: #f6e0d8;
-  color: #a14b36;
+  background: #efd5cb;
+  color: #7f3327;
 }
 .tag.run {
   background: #e0eafa;
@@ -385,6 +402,21 @@ header {
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+.archived-row {
+  opacity: 0.72;
+}
+.inline-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.inline-filter select {
+  width: auto;
+  min-width: 160px;
+  padding: 8px 10px;
 }
 .actions {
   display: flex;
@@ -450,6 +482,25 @@ header {
   color: var(--muted);
   font-size: 12px;
   margin: 18px 0;
+}
+.danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 42px;
+  padding: 22px 24px;
+  border: 1px solid #ddb9b0;
+  border-radius: 10px;
+  background: #fbefeb;
+}
+.danger-zone h2,
+.danger-zone p {
+  margin: 0;
+}
+.danger-zone p {
+  margin-top: 5px;
+  color: var(--muted);
 }
 .chipline {
   display: flex;
@@ -519,6 +570,113 @@ header {
   padding-left: 16px;
   margin-left: 0;
   color: var(--muted);
+}
+.frontmatter {
+  margin: 0 0 20px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f4f1e9;
+}
+.frontmatter pre {
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+  font: 12px/1.65 Consolas, monospace;
+}
+.commentable-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 12px;
+  align-items: start;
+  margin: 2px -8px;
+  padding: 0 8px;
+  border-left: 2px solid transparent;
+  border-radius: 5px;
+}
+.commentable-block:hover,
+.commentable-block:focus-within,
+.commentable-block.has-comments {
+  background: #f4f1e7;
+  border-left-color: #a4b59b;
+}
+.commentable-content {
+  min-width: 0;
+}
+.commentable-content > :first-child {
+  margin-top: 0;
+}
+.commentable-content > :last-child {
+  margin-bottom: 0;
+}
+.comment-button {
+  opacity: 0;
+  margin-top: 5px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--green);
+  background: #fffdf6;
+  border-color: #bdc9b6;
+}
+.commentable-block:hover .comment-button,
+.commentable-block:focus-within .comment-button,
+.commentable-block.has-comments .comment-button,
+.comment-button:focus-visible {
+  opacity: 1;
+}
+.comments-panel {
+  margin: 22px 0;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+}
+.comments-panel h3 {
+  margin: 5px 0 0;
+}
+.comment-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+.comment-item {
+  padding: 16px;
+  border: 1px solid #d7ded1;
+  border-left: 3px solid #b98255;
+  border-radius: 8px;
+  background: #fffdf8;
+}
+.comment-item.resolved {
+  border-left-color: #91a38a;
+  opacity: 0.72;
+}
+.comment-item p {
+  margin: 9px 0;
+  white-space: pre-wrap;
+}
+.comment-quote {
+  margin: 10px 0;
+  padding: 10px 12px;
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  background: #f1eee6;
+  border-radius: 6px;
+  font: 12px/1.65 Consolas, "Microsoft YaHei UI", monospace;
+}
+.empty.compact {
+  padding: 22px 12px;
+}
+.output-editor {
+  min-height: 58vh;
+  resize: vertical;
+  font: 13px/1.75 Consolas, "Microsoft YaHei UI", monospace;
+  tab-size: 2;
+}
+.version-list {
+  border-top: 1px solid var(--line);
+  margin-top: 20px;
 }
 dialog {
   border: 1px solid var(--line);
@@ -703,6 +861,18 @@ summary {
   }
   .actions {
     gap: 7px;
+  }
+  .commentable-block {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+  .comment-button {
+    opacity: 1;
+    justify-self: start;
+    margin-bottom: 8px;
+  }
+  .comments-panel .split {
+    flex-direction: column;
   }
   #toast {
     left: 50%;

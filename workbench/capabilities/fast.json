@@ -1,0 +1,44 @@
+{
+  "id": "fast",
+  "name": "快速迭代路径",
+  "description": "面向小型出海 App 团队：把资料直接转成新品分析、核心 PRD 和开发验收，不走机会门、访谈、风险清单或技术 Spike。",
+  "enabled": true,
+  "tasks": [
+    {
+      "id": "new-product-analysis",
+      "name": "F1 新品需求分析",
+      "description": "沿用 Heart Rate 产品结构，整合行业、用户、竞品差异、定位、范围、功能框架、核心功能、流程和商业化。",
+      "template": "knowledge/templates/f1-new-product-analysis.md",
+      "output": "F1 新品需求分析",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "Heart Rate 新品需求分析 行业 用户 竞品差异 产品定位 产品范围 功能框架 核心流程 商业化",
+      "max_chars": 16000,
+      "modes": ["fast"]
+    },
+    {
+      "id": "core-prd",
+      "name": "F2 核心 PRD",
+      "description": "基于新品分析写本轮真正要开发的页面、规则、状态、异常恢复和验收标准。",
+      "template": "knowledge/templates/f2-core-prd.md",
+      "output": "F2 核心 PRD",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "核心 PRD 页面 交互 业务规则 异常恢复 验收 竞品截图",
+      "max_chars": 8000,
+      "recommended_upstream": "fast/new-product-analysis",
+      "modes": ["fast"]
+    },
+    {
+      "id": "acceptance",
+      "name": "F3 开发验收清单",
+      "description": "在一份持续更新的清单中记录预期、实测、日志、截图、问题和复测结果。",
+      "template": "knowledge/templates/f3-development-acceptance.md",
+      "output": "F3 开发验收清单",
+      "tools": ["project-search", "document-parser", "codex"],
+      "query": "开发验收 QA 埋点 技术日志 截图 录像 测试报告 复测",
+      "max_chars": 5000,
+      "recommended_upstream": "fast/core-prd",
+      "review_policy": "acceptance",
+      "modes": ["fast"]
+    }
+  ]
+}

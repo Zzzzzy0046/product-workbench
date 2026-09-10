@@ -8,7 +8,7 @@ region: [global]
 evidence_level: approved-plan
 status: active
 source: [source-workflow-implementation-v1]
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
 tags: [A0, Manifest, 交接]
@@ -16,36 +16,35 @@ tags: [A0, Manifest, 交接]
 
 # A0 Project Manifest
 
-## 项目身份
+> 项目恢复和交接用的小记录，不是正式产品文档。
+
+## 项目
 
 - 项目名称：
-- 一句话产品方向：
-- 目标平台：Android-first / iOS-first / 双端 / 单平台
-- 候选区域：
-- 当前负责人：
+- 一句话方向：
+- 工作流模式：fast / full
+- 目标平台：
+- 团队与周期：
+- 当前工作：
 
-## 当前状态
+## 资料
 
-- 当前阶段：Initialization / Evidence / Definition / Solution / Build / Acceptance
-- 最近通过的 Gate：默认从 G2 Definition Gate 开始；如明确要求机会评估，才记录 G1
-- 当前执行状态：Researching / Defining / Building / Acceptance
-- 当前 Source of Truth：
+| 资料 | 类型 | 日期 | 当前用途 |
+|---|---|---|---|
+|  | 评论 / 政策 / 日志 / 截图 / 研究 / 其他 |  |  |
 
-## 输入与交付物
+## 快速交付物
 
-| 编号 | 交付物 | 路径 | 状态 | 版本 | 负责人 |
-|---|---|---|---|---|---|
-| A1 | Opportunity Brief（仅明确要求机会评估时） |  | Optional |  |  |
-| A2 | Competitor Evidence Pack |  | Missing |  |  |
-| A3 | Product Definition |  | Missing |  |  |
-| A4 | PRD |  | Missing |  |  |
-| A5 | Prototype Handoff |  | Missing |  |  |
-| A6 | Risk & Decision Log |  | Missing |  |  |
-| A7 | Tracking / QA / Acceptance Pack |  | Missing |  |  |
+| 交付物 | 路径 | 状态 | 更新时间 |
+|---|---|---|---|
+| F1 新品需求分析 |  | Missing / Draft / Review / Accepted |  |
+| F2 核心 PRD |  | Missing / Draft / Review / Accepted |  |
+| F3 开发验收清单 |  | Missing / Draft / Review / Accepted |  |
 
-## 未决事项
+## 当前事项
 
-- 阻断项：
-- 待确认输入：
-- 待验证假设：
-- 下一步最小动作：
+- 研发需要确认：
+- 当前缺陷：
+- 下一步：
+
+快速模式不记录风险、假设验证、Gate、技术 Spike 或条件闭环。完整模式需要这些控制字段时，按正式模式单独扩展。

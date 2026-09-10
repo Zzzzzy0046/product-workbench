@@ -6,17 +6,17 @@ stage: opportunity
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: archived
 source: [source-template-audit-v1]
-reviewed_at: 2026-09-08
+reviewed_at: 2026-09-10
 expires_at:
 supersedes: []
-tags: [A1, 新品分析, G1]
+tags: [A1, 新品分析, G1, 历史正式模式, formal-only]
 ---
 
 # A1 Opportunity Brief（可选）
 
-> 仅在用户明确要求机会筛选、比较多个品类，或要求在产品定义前判断“值不值得做”时使用。用户已经指定要做的品类默认跳过本模板，直接进入 T1 / T2。
+> 历史正式模式模板，不参与默认检索。仅在用户明确要求机会筛选、比较多个品类，或要求在产品定义前判断“值不值得做”时按文件路径使用。用户已经指定要做的品类直接进入 F1。
 
 ## 0. 结论
 

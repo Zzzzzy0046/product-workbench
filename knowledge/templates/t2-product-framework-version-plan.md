@@ -6,13 +6,15 @@ stage: definition
 platform: [android, ios]
 region: [global]
 evidence_level: approved-plan
-status: active
+status: archived
 source: [template-t1-new-product-analysis, method-new-product-analysis]
-reviewed_at: 2026-09-09
-tags: [T2, 产品定义, MVP, 版本规划, 中文]
+reviewed_at: 2026-09-10
+tags: [T2, 产品定义, MVP, 版本规划, 中文, 历史正式模式, formal-only]
 ---
 
 # T2 产品框架与版本规划
+
+> 历史完整研究模式交付物，不参与默认检索。快速流程直接从 F1 新品需求分析进入 F2 核心 PRD。
 
 ## 0. 文档信息与前置结论
 

@@ -13,8 +13,8 @@ questions:
     query: 本地 Mock 能不能算真实设备和真实 API 验证？
     expected_sources: [method-evidence-status]
   - id: q05-new-product-sequence
-    query: 新品分析从市场用户到最终 Go Hold 的完整顺序是什么？
-    expected_sources: [method-new-product-analysis]
+    query: 小团队新品已经决定要做，现有资料如何进入新品分析核心 PRD 和开发验收？
+    expected_sources: [method-new-product-analysis, template-f1-new-product-analysis]
   - id: q06-heart-writing-style
     query: Heart Rate 新品文档最值得复用的写法是什么？
     expected_sources: [case-heart-rate-template-evolution, method-new-product-analysis]
@@ -23,16 +23,16 @@ questions:
     expected_sources: [case-heart-rate-template-evolution]
   - id: q08-g1
     query: G1 机会门禁要检查什么？
-    expected_sources: [method-workflow-gates, template-a1-opportunity-brief]
+    expected_sources: [method-workflow-gates]
   - id: q09-g2
     query: 竞品证据如何进入 G2 产品定义门禁？
-    expected_sources: [method-workflow-gates, template-a3-product-definition]
+    expected_sources: [method-workflow-gates]
   - id: q10-g3
     query: MVP 主流程异常权限什么时候算方案闭环？
     expected_sources: [method-workflow-gates, pattern-prd-state-closure]
   - id: q11-g4
     query: 研发验收门禁如何检查需求原型实现埋点测试的一致性？
-    expected_sources: [method-workflow-gates, template-a7-tracking-qa-acceptance]
+    expected_sources: [method-workflow-gates, template-f3-development-acceptance]
   - id: q12-g5
     query: 什么情况下才能进入已有产品数据的迭代诊断？
     expected_sources: [method-workflow-gates, decision-workflow-scope-2026-09-08]
@@ -56,7 +56,7 @@ questions:
     expected_sources: [decision-knowledge-writeback-policy]
   - id: q19-prd-exception-states
     query: PRD 除正常路径之外必须覆盖哪些异常和恢复状态？
-    expected_sources: [pattern-prd-state-closure, template-a4-prd]
+    expected_sources: [pattern-prd-state-closure, template-f2-core-prd]
   - id: q20-prototype-handoff
     query: 左侧页面效果右侧中文需求和美术标注应该用哪个模板？
     expected_sources: [template-a5-prototype-handoff]
@@ -64,23 +64,23 @@ questions:
     query: 如何记录项目当前阶段 Source of Truth 阻断项和下一步？
     expected_sources: [template-a0-project-manifest]
   - id: q22-opportunity-brief
-    query: Beachhead 用户首次价值留存假设和 Kill Criteria 放在哪里？
-    expected_sources: [template-a1-opportunity-brief]
+    query: 已经确定要做的品类还需要机会 Brief、留存假设和 Kill Criteria 吗？
+    expected_sources: [method-new-product-analysis, template-f1-new-product-analysis]
   - id: q23-competitor-pack
-    query: 竞品商店证据实机路径评论商业化如何做成证据包？
-    expected_sources: [template-a2-competitor-evidence-pack]
+    query: 竞品评论 CSV 政策来源技术日志截图和研究资料如何进入新品需求分析？
+    expected_sources: [template-f1-new-product-analysis, method-new-product-analysis]
   - id: q24-product-definition
-    query: 产品定位 MVP 现在做后置不做和平台差异如何记录？
-    expected_sources: [template-a3-product-definition]
+    query: 产品定位 MVP 现在做后置和不做如何记录？
+    expected_sources: [template-f1-new-product-analysis]
   - id: q25-prd-template
     query: User Story 页面规则状态异常和 Acceptance Criteria 用哪个交付物？
-    expected_sources: [template-a4-prd]
+    expected_sources: [template-f2-core-prd]
   - id: q26-risk-decision-log
-    query: 风险假设决策替代方案和 revisit trigger 怎么记录？
-    expected_sources: [template-a6-risk-decision-log]
+    query: 快速流程是否需要单独生成风险假设决策日志？
+    expected_sources: [method-new-product-analysis]
   - id: q27-tracking-acceptance
     query: 埋点 PASS FAIL BLOCKED NOT_RUN 的验收证据怎么处理？
-    expected_sources: [template-a7-tracking-qa-acceptance]
+    expected_sources: [template-f3-development-acceptance]
   - id: q28-monetization-boundary
     query: 广告和订阅怎样避免破坏读取测量保存等核心任务？
     expected_sources: [pattern-monetization-task-boundary]
