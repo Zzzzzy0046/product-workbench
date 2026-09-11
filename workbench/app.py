@@ -33,8 +33,8 @@ MAX_TEXT = 2_000_000
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 TOOLS = [
     {"id":"document-parser", "name":"资料解析", "status":"ready", "description":"MD、TXT、CSV、JSON、文本 PDF、DOCX 与 PNG/JPG/WEBP 截图；扫描 PDF 需先 OCR。"},
-    {"id":"project-search", "name":"项目资料检索", "status":"ready", "description":"按项目隔离，中文双字切分与英文词检索，保留原文片段。"},
-    {"id":"knowledge-search", "name":"方法与模板检索", "status":"ready", "description":"只读现有 knowledge 中的 active 条目，复用历史方法和模板。"},
+    {"id":"project-search", "name":"项目资料检索", "status":"ready", "description":"项目隔离 Hybrid RAG；不可用时自动回退关键词检索。"},
+    {"id":"knowledge-search", "name":"方法与模板检索", "status":"ready", "description":"组合全局只读 Product KB，为项目证据补充方法和模板。"},
     {"id":"codex", "name":"Codex 生成引擎", "status":"ready", "description":"通过本机已登录的 Codex CLI 执行，使用本机默认模型；实际就绪状态见运行环境。"},
     {"id":"review-scraper", "name":"竞品评论采集器", "status":"manual", "description":"当前导入采集器导出的 CSV；自动启动爬虫的适配器尚未接入。"},
 ]
@@ -194,6 +194,12 @@ class Workbench:
         self.data.mkdir(parents=True, exist_ok=True)
         self.db_path = self.data / "workbench.sqlite3"
         self.runner = runner or self.run_codex
+        configured_retrieval = os.environ.get("WORKBENCH_RETRIEVAL_MODE")
+        self.retrieval_mode = (configured_retrieval or ("keyword" if runner is not None else "hybrid")).lower()
+        if self.retrieval_mode not in {"keyword", "hybrid", "shadow"}:
+            self.retrieval_mode = "hybrid"
+        self.retriever = None
+        self.retrieval_error = ""
         self.lock = threading.RLock()
         self.processes = {}
         self.threads = {}
@@ -554,6 +560,7 @@ class Workbench:
                     db.execute("DELETE FROM contexts WHERE project_id=?", (project_id,))
                     db.execute("DELETE FROM jobs WHERE project_id=?", (project_id,))
                     db.execute("DELETE FROM projects WHERE id=?", (project_id,))
+                self._remove_project_index(project_id)
             except Exception:
                 for source, destination in reversed(moved):
                     if destination.exists() and not source.exists():
@@ -689,10 +696,12 @@ class Workbench:
         try:
             snapshot = json.loads((directory / "project-export.json").read_text(encoding="utf-8"))
             project_name = str(snapshot["project"]["name"])
+            project_id = str(snapshot["project"]["id"])
         except (OSError,ValueError,KeyError,TypeError) as exc:
             raise ValueError("回收记录损坏，不能安全删除。") from exc
         if not isinstance(confirmation,str) or confirmation.strip() != project_name:
             raise ValueError("项目名称不匹配，未永久删除。")
+        self._remove_project_index(project_id)
         shutil.rmtree(directory)
         return {"deleted":True,"trash_id":trash_id,"project_name":project_name}
 
@@ -766,7 +775,7 @@ class Workbench:
             result.append({"id":meta.get("id", path.stem),"name":path.stem,"text":text,"path":str(path.relative_to(ROOT)),"kind":"knowledge"})
         return result
 
-    def search(self, project_id, query, limit=8):
+    def _keyword_search(self, project_id, query, limit=8):
         self.project(project_id)
         if not query.strip():
             return []
@@ -792,6 +801,99 @@ class Workbench:
         project_hits = [c for c in candidates if c["kind"] != "knowledge"][:max(1,limit//2)]
         rest = [c for c in candidates if c not in project_hits]
         return (project_hits + rest)[:limit]
+
+    def _hybrid(self):
+        with self.lock:
+            if self.retriever is None:
+                try:
+                    from workbench.retrieval import CompositeRetriever
+                except ModuleNotFoundError:
+                    from retrieval import CompositeRetriever
+                self.retriever = CompositeRetriever(self.data, ROOT)
+            return self.retriever
+
+    def _with_image_paths(self, project_id, sources):
+        for source in sources:
+            if source.get("kind") != "upload" or Path(source.get("name", "")).suffix.lower() not in IMAGE_SUFFIXES:
+                continue
+            image_path = self.upload_path(project_id, source.get("source_id", ""), source.get("name", ""))
+            if image_path.is_file():
+                source["image_path"] = str(image_path)
+        return sources
+
+    def retrieval_status(self):
+        if self.retrieval_mode == "keyword":
+            return {
+                "mode": "keyword",
+                "retrieval": "关键词片段检索（测试或手动回退模式）",
+                "hybrid_available": False,
+                "global_index": False,
+                "project_index": False,
+                "fallback": False,
+            }
+        try:
+            status = self._hybrid().status()
+            return {
+                **status,
+                "mode": self.retrieval_mode,
+                "retrieval": "Hybrid RAG：项目证据优先 + 全局方法知识补充"
+                + ("（上次检索异常，已回退关键词）" if self.retrieval_error else ""),
+                "hybrid_available": True,
+                "fallback": bool(self.retrieval_error),
+            }
+        except Exception as exc:
+            self.retrieval_error = str(exc)[:300]
+            return {
+                "mode": self.retrieval_mode,
+                "retrieval": "关键词片段检索（Hybrid RAG 当前不可用，已自动回退）",
+                "hybrid_available": False,
+                "global_index": False,
+                "project_index": False,
+                "fallback": True,
+            }
+
+    def search(self, project_id, query, limit=8):
+        self.project(project_id)
+        query = str(query)
+        if not query.strip():
+            return []
+        if self.retrieval_mode in {"hybrid", "shadow"}:
+            documents = self.rows(
+                "SELECT id,name,text,kind,sha,created FROM documents WHERE project_id=?",
+                (project_id,),
+            )
+            try:
+                from workbench.retrieval import public_sources
+            except ModuleNotFoundError:
+                from retrieval import public_sources
+            try:
+                hybrid_sources = public_sources(
+                    self._hybrid().search(project_id, query, documents, limit)
+                )
+                self.retrieval_error = ""
+                if self.retrieval_mode == "hybrid" and hybrid_sources:
+                    return self._with_image_paths(project_id, hybrid_sources)
+            except Exception as exc:
+                self.retrieval_error = str(exc)[:300]
+        return self._with_image_paths(
+            project_id,
+            self._keyword_search(project_id, query, limit),
+        )
+
+    def _remove_project_index(self, project_id):
+        manifest = self.data / "index" / "project-manifest.json"
+        if self.retriever is None and not manifest.is_file():
+            return 0
+        try:
+            removed = self._hybrid().remove_project(project_id)
+            self.retrieval_error = ""
+            return removed
+        except Exception as exc:
+            # Project deletion must remain recoverable even if a local vector
+            # index is temporarily locked. A stale entry remains isolated by
+            # project_id and is removed on the next successful cleanup.
+            self.retrieval_error = str(exc)[:300]
+            return 0
 
     def prepare(self, project_id, key, instruction, document_ids=None):
         project, task = self.project(project_id), self.task(key)
@@ -1357,8 +1459,16 @@ class Workbench:
                 db.execute("UPDATE jobs SET archived=?,updated=? WHERE id=?", (value,now(),job_id))
         return self.job(job_id)
 
+    def close(self):
+        with self.lock:
+            if self.retriever is not None:
+                self.retriever.close()
+                self.retriever = None
+
     def state(self, project_id=None):
-        result = {"projects":self.rows("SELECT * FROM projects ORDER BY created DESC"),"trash":self.trash_items(),"packs":self.registry(),"tools":TOOLS,"runtime":{"available":bool(codex_command()),"model":configured_model() or "CLI 默认模型","retrieval":"中文双字 / 英文关键词片段检索","knowledge_count":len(self.knowledge())},"token":self.token}
+        runtime = self.retrieval_status()
+        runtime.update({"available":bool(codex_command()),"model":configured_model() or "CLI 默认模型","knowledge_count":len(self.knowledge())})
+        result = {"projects":self.rows("SELECT * FROM projects ORDER BY created DESC"),"trash":self.trash_items(),"packs":self.registry(),"tools":TOOLS,"runtime":runtime,"token":self.token}
         if project_id:
             result["project"] = self.project(project_id)
             result["context"] = self.context(project_id)
@@ -1373,7 +1483,7 @@ class Workbench:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "ProductWorkbench/0.7"
+    server_version = "ProductWorkbench/0.8"
 
     def log_message(self, fmt, *args):
         pass
@@ -1533,6 +1643,7 @@ def main():
     finally:
         for process in list(app.processes.values()):
             app.stop_process(process)
+        app.close()
         server.server_close()
 
 

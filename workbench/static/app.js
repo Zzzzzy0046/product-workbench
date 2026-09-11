@@ -303,7 +303,7 @@ async function search() {
         encodeURIComponent($("#search-query").value),
     );
     $("#search-results").innerHTML =
-      `<div class="help">${state.runtime.retrieval} · 返回原文片段，匹配分数不代表事实可信度。</div>` +
+      `<div class="help">${state.runtime.retrieval} · 保留原文片段供核对；检索排序不代表事实已经确认。</div>` +
       results
         .map(
           (r) =>
@@ -370,8 +370,10 @@ function confirmPermanentDeleteTrash(id, name) {
   };
 }
 function drawCapabilities() {
+  const globalStats = state.runtime.global || {},
+    projectStats = state.runtime.project || {};
   $("#content").innerHTML =
-    `<div class="heading"><div><div class="eyebrow">CAPABILITY LIBRARY</div><h1>让工作台随工作生长。</h1><p>启用能力后，项目中会出现对应任务。任务、资料和交付物仍使用同一套工作方式。</p></div><button data-tab="overview">返回项目</button></div><div class="grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag">${p.enabled ? "已启用" : "可启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用此能力" : "启用此能力"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="card">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.status === "manual" ? "warn" : ""}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}</div><div class="section-title"><h2>运行环境</h2></div><div class="card"><p>生成模型：<span class="mono">${E(state.runtime.model)}</span></p><p>知识来源：${state.runtime.knowledge_count} 份已启用方法、模板与案例。</p><p>检索方式：${E(state.runtime.retrieval)}。现有 Hybrid RAG 仍可从 Product KB MCP 使用，工作台暂未接上语义向量检索。</p><div class="help">扩展方式：在 workbench/capabilities 中增加 JSON 能力定义，引用仓库内 Markdown 模板，即可新增任务。新工具的实际执行需要编写后端适配器，添加名字不会自动获得工具能力。</div></div>`;
+    `<div class="heading"><div><div class="eyebrow">CAPABILITY LIBRARY</div><h1>让工作台随工作生长。</h1><p>启用能力后，项目中会出现对应任务。任务、资料和交付物仍使用同一套工作方式。</p></div><button data-tab="overview">返回项目</button></div><div class="grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag">${p.enabled ? "已启用" : "可启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用此能力" : "启用此能力"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="card">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.status === "manual" ? "warn" : ""}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}</div><div class="section-title"><h2>运行环境</h2></div><div class="card"><p>生成模型：<span class="mono">${E(state.runtime.model)}</span></p><p>知识来源：${state.runtime.knowledge_count} 份已启用方法、模板与案例。</p><p>检索方式：${E(state.runtime.retrieval)}。</p><p>全局知识索引：${state.runtime.global_index ? `${globalStats.sources || 0} 个来源 / ${globalStats.chunks || 0} 个片段` : "未建立或当前不可用"}</p><p>项目隔离索引：${state.runtime.project_index ? `${projectStats.sources || 0} 份资料 / ${projectStats.chunks || 0} 个片段` : "将在首次检索时建立"}</p>${state.runtime.fallback ? '<div class="banner">Hybrid RAG 当前已自动回退关键词检索，不会阻断资料准备和文档生成。</div>' : ""}<div class="help">检索结果继续展示来源和原文，便于检查生成依据；向量 ID、内部得分和索引治理字段不会进入任务正文。扩展新工具仍需实现后端适配器，添加名字不会自动获得工具能力。</div></div>`;
 }
 function newProject() {
   modal(

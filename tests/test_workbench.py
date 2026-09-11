@@ -31,6 +31,83 @@ def test_project_isolation_and_persistence(bench):
     assert app.Workbench(bench.data).project(a['id'])['name'] == '项目一'
 
 
+def test_hybrid_retrieval_keeps_evidence_visible_and_strips_internal_fields(bench):
+    project=bench.create_project('检索项目','验证双索引')
+    document=bench.add_document(project['id'],'项目证据.txt','当前项目有一条可核对的核心证据。'.encode())
+
+    class FakeRetriever:
+        def search(self, project_id, query, documents, limit):
+            assert project_id==project['id']
+            assert any(item['id']==document['id'] for item in documents)
+            return [{
+                'source_id':document['id'], 'name':'项目证据.txt', 'kind':'upload',
+                'location':'项目证据.txt', 'chunk':1, 'text':'当前项目有一条可核对的核心证据。',
+                'retrieval_score':0.93, 'chunk_id':'internal-vector-id', 'project_id':project_id,
+            }]
+
+        def status(self):
+            return {'global_index':True,'project_index':True,'global':{'sources':23,'chunks':118},'project':{'sources':1,'chunks':1}}
+
+        def remove_project(self, project_id):
+            return 1
+
+        def close(self):
+            pass
+
+    bench.retrieval_mode='hybrid'
+    bench.retriever=FakeRetriever()
+    result=bench.search(project['id'],'核心证据')
+    assert result[0]['text']=='当前项目有一条可核对的核心证据。'
+    assert result[0]['source_id']==document['id']
+    assert 'retrieval_score' not in result[0]
+    assert 'chunk_id' not in result[0]
+    assert 'project_id' not in result[0]
+    assert bench.retrieval_status()['retrieval'].startswith('Hybrid RAG')
+
+
+def test_hybrid_failure_falls_back_to_keyword_search(bench):
+    project=bench.create_project('回退项目','')
+    document=bench.add_document(project['id'],'回退证据.txt','fallback-marker 可以继续检索。'.encode())
+
+    class BrokenRetriever:
+        def search(self, *args, **kwargs):
+            raise RuntimeError('embedding unavailable')
+
+        def status(self):
+            raise RuntimeError('embedding unavailable')
+
+        def close(self):
+            pass
+
+    bench.retrieval_mode='hybrid'
+    bench.retriever=BrokenRetriever()
+    result=bench.search(project['id'],'fallback-marker')
+    assert result[0]['source_id']==document['id']
+    assert 'embedding unavailable' in bench.retrieval_error
+    assert bench.retrieval_status()['fallback'] is True
+
+
+def test_project_delete_cleans_hybrid_index(bench):
+    project=bench.create_project('索引清理项目','')
+
+    class FakeRetriever:
+        def __init__(self):
+            self.removed=[]
+
+        def remove_project(self, project_id):
+            self.removed.append(project_id)
+            return 1
+
+        def close(self):
+            pass
+
+    retriever=FakeRetriever()
+    bench.retrieval_mode='hybrid'
+    bench.retriever=retriever
+    bench.delete_project(project['id'],'索引清理项目')
+    assert retriever.removed==[project['id']]
+
+
 def test_project_delete_requires_name_and_keeps_recovery_snapshot(bench):
     project=bench.create_project('待删除项目','包含本地资料和交付物')
     other=bench.create_project('保留项目','不能被误删')

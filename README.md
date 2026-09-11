@@ -10,7 +10,7 @@
 .venv\Scripts\python.exe workbench\app.py
 ```
 
-启动后打开 `http://127.0.0.1:8765`。安装、使用方式、扩展机制和明确边界见 [工作台使用手册](workbench/README.md)。工作台当前使用关键词检索；下方 Product KB Hybrid RAG 仍为独立能力。
+启动后打开 `http://127.0.0.1:8765`。安装、使用方式、扩展机制和明确边界见 [工作台使用手册](workbench/README.md)。工作台已接入双索引 Hybrid RAG：当前项目资料独立索引，全局 Product KB 只读补充方法知识；不可用时自动回退关键词检索。
 
 ## 工作流使用手册
 

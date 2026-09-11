@@ -1,6 +1,6 @@
 # 本地产品工作台
 
-V0.7 面向小型出海 App 团队。用户给出的新品默认就是要做，工作台只保留三份主交付物：
+V0.8 面向小型出海 App 团队。用户给出的新品默认就是要做，工作台只保留三份主交付物：
 
 ```text
 F1 新品需求分析
@@ -109,7 +109,7 @@ workbench/data/trash/<时间>-<项目ID>/
 | 任务恢复与整理 | 取消/失败/中断恢复、修订父子链、生成时模式、筛选与非破坏归档 |
 | 项目删除 | 项目名二次确认、运行状态拦截、本地完整备份、回收站恢复与永久删除 |
 | 评论采集 | 可导入桌面采集器 CSV；自动启动采集器尚未接入 |
-| RAG | 工作台为关键词检索；Product KB MCP 的 Hybrid RAG 独立可用 |
+| RAG | 项目隔离 Hybrid 索引 + Product KB 全局只读索引；失败自动回退关键词，来源原文保持可见 |
 | 导出 | Markdown；Word、Excel、Axure、Figma 尚未接入 |
 
 完整研究模式和历史 T1–T4 继续保留用于明确要求的正式研究，不是日常默认流程。完整模式仍可显示条件管理；快速模式隐藏该入口。
@@ -119,6 +119,7 @@ workbench/data/trash/<时间>-<项目ID>/
 ```text
 workbench/data/
   workbench.sqlite3
+  index/                    # 项目隔离向量索引与 manifest
   uploads/<项目ID>/
   runs/<任务ID>/
     任务包.md
@@ -130,6 +131,8 @@ workbench/data/
 ```
 
 本地文件不加密，按电脑文件权限保护。只有开始生成时，任务包和选中的图片才会发送给模型服务。
+
+默认检索模式为 `hybrid`。需要排查或临时禁用向量检索时，可以把环境变量 `WORKBENCH_RETRIEVAL_MODE` 设为 `keyword`；设为 `shadow` 时会执行 Hybrid 对比，但界面仍返回关键词结果。
 
 ## 验证
 
