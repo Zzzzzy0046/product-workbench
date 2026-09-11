@@ -11,6 +11,7 @@ integration/codex-config-snippet.toml
 workbench/data/
 workbench/.runtime/
 workbench/backups/
+archive/workbench-backups/
 tmp/
 audit/
 # Business project artifacts stay local; reusable methods/templates are versioned.

@@ -87,6 +87,54 @@ def test_hybrid_failure_falls_back_to_keyword_search(bench):
     assert bench.retrieval_status()['fallback'] is True
 
 
+def test_prepare_accepts_human_readable_knowledge_locator(bench):
+    project=bench.create_project('知识定位项目','验证 Product KB 中文章节定位')
+
+    class FakeRetriever:
+        def search(self, *args, **kwargs):
+            return [{
+                'source_id':'method-new-product-analysis',
+                'name':'新品需求分析方法',
+                'kind':'knowledge',
+                'location':'knowledge/wiki/methods/new-product-analysis.md',
+                'chunk':'新品需求分析方法',
+                'text':'先做新品分析，再进入核心 PRD。',
+            }]
+
+        def close(self):
+            pass
+
+    bench.retrieval_mode='hybrid'
+    bench.retriever=FakeRetriever()
+    job=bench.prepare(project['id'],'fast/new-product-analysis','')
+
+    assert job['sources'][0]['citation']=='S1'
+    assert job['sources'][0]['chunk']=='新品需求分析方法'
+
+
+def test_normalize_sources_reuses_nested_map_for_repeated_deliverable_chunks(bench):
+    project=bench.create_project('重复产物片段','验证同一上游产物多片段展开')
+    raw=bench.add_document(project['id'],'原始资料.txt','可追溯事实'.encode())
+    parent=bench.prepare(project['id'],'fast/new-product-analysis','',[raw['id']])
+    bench.complete(parent['id'],'# 上游正文\n\n这是用于验证重复检索片段展开的完整结论，结论来自 [S1]。','imported')
+
+    repeated=[]
+    for chunk in (1,2):
+        repeated.append({
+            'source_id':parent['id'],
+            'name':'F1 新品需求分析',
+            'kind':'deliverable',
+            'location':'F1 新品需求分析.md',
+            'chunk':chunk,
+            'text':'结论来自 [S1]。',
+        })
+
+    sources,maps=bench.normalize_sources(project['id'],repeated)
+
+    assert maps[parent['id']]['S1'] in {source['citation'] for source in sources}
+    assert all('[S1]' not in source['text'] or source['citation']=='S1' for source in sources[:2])
+
+
 def test_project_delete_cleans_hybrid_index(bench):
     project=bench.create_project('索引清理项目','')
 
@@ -195,7 +243,7 @@ def test_fast_path_project_profile_and_tasks(bench):
     )
     assert p['workflow_mode']=='fast'
     keys={task['key'] for pack in bench.registry() for task in pack['tasks']}
-    assert {'fast/new-product-analysis','fast/core-prd','fast/acceptance'} <= keys
+    assert {'fast/new-product-analysis','fast/core-prd','fast/tracking-spec','fast/acceptance'} <= keys
     assert not {'fast/competitor-delta','fast/spikes','fast/acceptance-run'} & keys
     job=bench.prepare(p['id'],'fast/new-product-analysis','只做核心闭环')
     assert '# F1 新品需求分析' in job['prompt']
@@ -210,8 +258,118 @@ def test_fast_path_project_profile_and_tasks(bench):
     assert '正文最多 16000 个中文字符' in job['prompt']
     assert 'template-t1-new-product-analysis' not in {source['source_id'] for source in job['sources']}
     assert '无法核验时用普通语言说明' in job['prompt']
-    assert '1 产品、1 Android、设计兼职' in job['prompt']
-    assert '10 个工作日' in job['prompt']
+    assert '1 产品、1 Android、设计兼职' not in job['prompt']
+    assert '10 个工作日' not in job['prompt']
+
+    tracking=bench.prepare(p['id'],'fast/tracking-spec','基于 F2 和蓝湖快照整理完整事件表')
+    assert '# 完整埋点方案' in tracking['prompt']
+    assert '事件 ID、参数名、枚举值使用英文' in tracking['prompt']
+    assert '不得记录 Cookie、Token' in tracking['prompt']
+
+
+def test_fast_f1_separates_project_evidence_from_historical_knowledge(bench):
+    project = bench.create_project('证据边界', '已确定做一个轻量工具。')
+
+    class FakeRetriever:
+        def search(self, *args, **kwargs):
+            return [
+                {
+                    'source_id': 'source-heart-rate-original-pdf',
+                    'name': '历史 Heart Rate 商业化页面',
+                    'kind': 'knowledge',
+                    'location': 'history.pdf',
+                    'chunk': 1,
+                    'text': '历史产品采用订阅与试用，不能迁移为当前产品事实。',
+                },
+                {
+                    'source_id': 'method-new-product-analysis',
+                    'name': '新品需求分析方法',
+                    'kind': 'knowledge',
+                    'location': 'knowledge/wiki/methods/new-product-analysis.md',
+                    'chunk': 1,
+                    'text': '使用 Heart Rate 结构，但方法资料不是当前产品证据。',
+                },
+                {
+                    'source_id': 'old-f1-output',
+                    'name': '旧 F1 交付物',
+                    'kind': 'accepted',
+                    'location': '旧 F1 交付物.md',
+                    'chunk': 1,
+                    'text': '旧文档里的推测性市场和商业化结论，不应自动带入新的 F1。',
+                },
+            ]
+
+        def close(self):
+            pass
+
+    bench.retrieval_mode = 'hybrid'
+    bench.retriever = FakeRetriever()
+    job = bench.prepare(project['id'], 'fast/new-product-analysis', '')
+    source_ids = {source['source_id'] for source in job['sources']}
+    assert 'source-heart-rate-original-pdf' not in source_ids
+    assert 'method-new-product-analysis' in source_ids
+    assert 'old-f1-output' not in source_ids
+    assert '历史产品采用订阅与试用' not in job['prompt']
+    assert '方法与模板参考（仅用于结构，不得作为当前产品事实或商业化依据）' in job['prompt']
+    assert '资料边界（必须遵守）' in job['prompt']
+
+
+def test_f1_quality_flags_ungrounded_metrics():
+    from workbench.validators import summarize, validate
+
+    result = summarize(
+        validate(
+            'fast/new-product-analysis',
+            '# F1 新品需求分析\n\n## 2. 行业与市场背景\n下载量 147K，收入 $64.7K，DAU 32K。',
+            'fast',
+            [{'kind': 'upload', 'citation': 'S1'}],
+        )
+    )
+    assert any(issue['code'] == 'f1-ungrounded-metric' for issue in result['issues'])
+
+
+def test_f1_quality_flags_ungrounded_generalization():
+    from workbench.validators import summarize, validate
+
+    result = summarize(
+        validate(
+            'fast/new-product-analysis',
+            '# F1 新品需求分析\n\n## 2. 行业与市场背景\n品类需求已验证，用户普遍需要这个功能。',
+            'fast',
+            [{'kind': 'upload', 'citation': 'S1'}],
+        )
+    )
+    assert any(issue['code'] == 'f1-ungrounded-generalization' for issue in result['issues'])
+
+
+def test_lanhu_snapshot_is_imported_as_project_evidence(bench):
+    p=bench.create_project('蓝湖埋点项目','需要从原型生成完整埋点')
+    snapshot=bench.add_lanhu_snapshot(
+        p['id'],
+        'https://lanhuapp.com/web/#/item/project/product?tid=test&pid=test&docId=test&token=do-not-store',
+        [{'id':'page-1','name':'扫描页','states':['Loading','Empty'],'text':'点击 Scan again 后重新扫描附近设备。'}],
+    )
+    assert snapshot['id']
+    document=bench.rows('SELECT name,text,kind FROM documents WHERE id=?',(snapshot['id'],))[0]
+    assert document['kind']=='upload'
+    assert '蓝湖原型快照' in document['text']
+    assert '扫描页' in document['text']
+    assert 'docId=test' in document['text']
+    assert 'do-not-store' not in document['text']
+    with pytest.raises(ValueError):
+        bench.add_lanhu_snapshot(p['id'],'https://example.com/project',[{'name':'页面'}])
+
+
+def test_lanhu_settings_are_non_secret_and_reconfigurable(bench, tmp_path):
+    config=tmp_path/'codex.toml'
+    config.write_text('[mcp_servers.lanhu]\ncommand="npx"\nargs=["-y", "mcp-lanhu"]\n[mcp_servers.lanhu.env]\nlanhu_COOKIE="secret"\n', encoding='utf-8')
+    settings=bench.save_lanhu_settings({'config_path':str(config)})
+    assert settings['config_exists'] is True
+    assert settings['package']=='mcp-lanhu'
+    assert settings['env_keys']==['lanhu_COOKIE']
+    assert 'secret' not in json.dumps(settings, ensure_ascii=False)
+    with pytest.raises(ValueError):
+        bench.save_lanhu_settings({'command':'powershell'})
 
 
 def test_draft_can_be_pinned_with_warning_but_not_auto_retrieved(bench):

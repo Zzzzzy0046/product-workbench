@@ -84,6 +84,18 @@ button.small {
 a {
   color: var(--green);
 }
+.button-link {
+  display: inline-block;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--green);
+  text-decoration: none;
+}
+.button-link:hover {
+  background: var(--light);
+}
 input,
 textarea,
 select {
@@ -453,6 +465,35 @@ header {
   border: 0;
   font-size: 12px;
 }
+.scraper-card {
+  margin: 20px 0;
+}
+.scraper-card .section-title {
+  margin-top: 0;
+}
+.scrape-list {
+  border-top: 1px solid var(--line);
+}
+.scrape-error {
+  display: block;
+  margin-top: 5px;
+  color: #8a4437;
+  white-space: pre-wrap;
+}
+.material-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.asset-thumb {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f2f0e8;
+  flex: 0 0 auto;
+}
 .searchbar {
   display: flex;
   gap: 10px;
@@ -571,6 +612,26 @@ header {
   margin-left: 0;
   color: var(--muted);
 }
+.document-image {
+  display: block;
+  max-width: 100%;
+  max-height: 720px;
+  margin: 12px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  object-fit: contain;
+  background: #f4f1e9;
+}
+.document-image-preview {
+  max-height: 420px;
+  margin: 0 0 18px;
+}
+.image-load-error {
+  min-height: 52px;
+  padding: 14px;
+  color: #8a4437;
+  background: #fbefeb;
+}
 .frontmatter {
   margin: 0 0 20px;
   padding: 10px 14px;
@@ -673,6 +734,42 @@ header {
   resize: vertical;
   font: 13px/1.75 Consolas, "Microsoft YaHei UI", monospace;
   tab-size: 2;
+}
+.image-insert-panel {
+  margin: 16px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid #d7ded1;
+  border-radius: 8px;
+  background: #eef1e9;
+}
+.image-insert-panel label {
+  margin-top: 0;
+}
+.image-insert-panel small {
+  display: block;
+  margin-top: 9px;
+}
+.quality-check {
+  margin: 18px 0;
+  padding: 14px 18px;
+  border: 1px solid #c9d5c4;
+  border-radius: 8px;
+  background: #eef3ea;
+}
+.quality-check.quality-has-errors {
+  border-color: #ddb9b0;
+  background: #fbefeb;
+}
+.quality-check ul {
+  margin: 10px 0 0;
+  padding-left: 20px;
+}
+.quality-check li {
+  margin: 5px 0;
+}
+.quality-check li small {
+  display: block;
+  color: var(--muted);
 }
 .version-list {
   border-top: 1px solid var(--line);

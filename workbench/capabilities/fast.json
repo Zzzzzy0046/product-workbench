@@ -7,7 +7,7 @@
     {
       "id": "new-product-analysis",
       "name": "F1 新品需求分析",
-      "description": "沿用 Heart Rate 产品结构，整合行业、用户、竞品差异、定位、范围、功能框架、核心功能、流程和商业化。",
+      "description": "沿用 Heart Rate 产品结构，整合行业、用户、竞品差异、定位、范围、功能框架、核心功能、流程和商业化；资料不足时明确写未覆盖，不外推历史案例。",
       "template": "knowledge/templates/f1-new-product-analysis.md",
       "output": "F1 新品需求分析",
       "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
@@ -25,6 +25,18 @@
       "query": "核心 PRD 页面 交互 业务规则 异常恢复 验收 竞品截图",
       "max_chars": 8000,
       "recommended_upstream": "fast/new-product-analysis",
+      "modes": ["fast"]
+    },
+    {
+      "id": "tracking-spec",
+      "name": "完整埋点方案（可选）",
+      "description": "根据已确认 PRD、蓝湖原型快照、截图或交互资料生成研发可执行的完整埋点方案；不自动进入每个新品项目。",
+      "template": "knowledge/templates/f4-tracking-spec.md",
+      "output": "完整埋点方案",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "tracking-spec-from-prototype 埋点 页面展示 点击 选择 结果 权限 失败 重试 漏斗 参数 隐私",
+      "max_chars": 20000,
+      "recommended_upstream": "fast/core-prd",
       "modes": ["fast"]
     },
     {

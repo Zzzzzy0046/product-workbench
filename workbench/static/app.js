@@ -33,6 +33,45 @@ const kinds = {
   accepted: "已确认交付物",
 };
 const workflowNames = { fast: "快速迭代", full: "完整研究" };
+const scrapeStatusNames = {
+  queued: "等待采集",
+  running: "采集中",
+  completed: "已完成",
+  empty: "无评论",
+  failed: "采集失败",
+  cancelled: "已取消",
+};
+const imageSuffixes = new Set(["png", "jpg", "jpeg", "webp"]);
+const platformLabels = {
+  "Android-first": "Android",
+  "iOS-first": "iOS",
+  "双端": "双平台",
+  Android: "Android",
+  iOS: "iOS",
+  "双平台": "双平台",
+};
+const normalizePlatform = (value) =>
+  ({ Android: "Android-first", iOS: "iOS-first", "双平台": "双端" }[
+    String(value || "")
+  ] || String(value || ""));
+const platformSelect = (value) => {
+  const current = normalizePlatform(value);
+  const options = [
+    ["", "未指定"],
+    ["Android-first", "Android"],
+    ["iOS-first", "iOS"],
+    ["双端", "双平台"],
+  ];
+  if (current && !options.some(([option]) => option === current)) {
+    options.push([current, String(value)]);
+  }
+  return options
+    .map(
+      ([option, label]) =>
+        `<option value="${E(option)}" ${option === current ? "selected" : ""}>${E(label)}</option>`,
+    )
+    .join("");
+};
 const conditionNames = {
   open: "未开始",
   in_progress: "进行中",
@@ -123,6 +162,13 @@ function close() {
 }
 $("#close-modal").onclick = close;
 $("#modal").addEventListener("cancel", () => (activeJob = null));
+document.addEventListener("error", (event) => {
+  const image = event.target;
+  if (image?.matches?.("img.document-image")) {
+    image.classList.add("image-load-error");
+    image.alt = `${image.alt || "项目图片"}（加载失败，请检查图片资料）`;
+  }
+}, true);
 function draw() {
   $("#projects").innerHTML =
     state.projects
@@ -145,7 +191,7 @@ function draw() {
     return;
   }
   $("#content").innerHTML =
-    `<div class="heading"><div><div class="eyebrow">PROJECT WORKSPACE</div><h1>${E(state.project.name)}</h1><div class="chipline"><span class="tag">当前模式：${E(workflowNames[state.project.workflow_mode] || state.project.workflow_mode)}</span><span class="tag">${E(state.project.platform || "平台待定")}</span><span class="tag">${E(state.project.timebox || "周期待定")}</span></div><p>${E(state.project.brief || "先补充项目背景，让后续任务有依据。")}</p></div><button class="primary" data-tab="tasks">开始一项任务 ↗</button></div><nav class="tabs" aria-label="工作区" role="tablist"><button role="tab" aria-selected="${tab === "overview"}" data-tab="overview" class="${tab === "overview" ? "active" : ""}">项目概览</button><button role="tab" aria-selected="${tab === "context"}" data-tab="context" class="${tab === "context" ? "active" : ""}">项目背景</button>${state.project.workflow_mode === "full" ? `<button role="tab" aria-selected="${tab === "conditions"}" data-tab="conditions" class="${tab === "conditions" ? "active" : ""}">条件闭环</button>` : ""}<button role="tab" aria-selected="${tab === "materials"}" data-tab="materials" class="${tab === "materials" ? "active" : ""}">资料与检索</button><button role="tab" aria-selected="${tab === "tasks"}" data-tab="tasks" class="${tab === "tasks" ? "active" : ""}">任务</button><button role="tab" aria-selected="${tab === "outputs"}" data-tab="outputs" class="${tab === "outputs" ? "active" : ""}">交付物</button></nav><div id="view" role="tabpanel"></div>`;
+    `<div class="heading"><div><div class="eyebrow">PROJECT WORKSPACE</div><h1>${E(state.project.name)}</h1><div class="chipline"><span class="tag">当前模式：${E(workflowNames[state.project.workflow_mode] || state.project.workflow_mode)}</span>${state.project.platform ? `<span class="tag">${E(platformLabels[state.project.platform] || state.project.platform)}</span>` : ""}</div><p>${E(state.project.brief || "先补充项目背景，让后续任务有依据。")}</p></div><div class="actions"><a class="button-link" href="/api/projects/${encodeURIComponent(projectId)}/export">导出完整项目</a><button class="primary" data-tab="tasks">开始一项任务 ↗</button></div></div><nav class="tabs" aria-label="工作区" role="tablist"><button role="tab" aria-selected="${tab === "overview"}" data-tab="overview" class="${tab === "overview" ? "active" : ""}">项目概览</button><button role="tab" aria-selected="${tab === "context"}" data-tab="context" class="${tab === "context" ? "active" : ""}">项目背景</button>${state.project.workflow_mode === "full" ? `<button role="tab" aria-selected="${tab === "conditions"}" data-tab="conditions" class="${tab === "conditions" ? "active" : ""}">条件闭环</button>` : ""}<button role="tab" aria-selected="${tab === "materials"}" data-tab="materials" class="${tab === "materials" ? "active" : ""}">资料与检索</button><button role="tab" aria-selected="${tab === "tasks"}" data-tab="tasks" class="${tab === "tasks" ? "active" : ""}">任务</button><button role="tab" aria-selected="${tab === "outputs"}" data-tab="outputs" class="${tab === "outputs" ? "active" : ""}">交付物</button></nav><div id="view" role="tabpanel"></div>`;
   if (tab === "conditions" && state.project.workflow_mode !== "full") tab = "overview";
   (
     ({
@@ -183,11 +229,11 @@ function drawOverview() {
   const docs = state.documents,
     jobs = state.jobs;
   $("#view").innerHTML =
-    `<div class="grid"><div class="card hero"><div class="eyebrow">这次，要完成什么？</div><h2>一次推进一项工作，<br>留下可以继续用的成果。</h2><p>${state.project.workflow_mode === "fast" ? "快速模式只有三份主交付物：新品需求分析、核心 PRD、开发验收清单。评论、政策、日志、截图和研究资料直接进入对应文档。" : "完整模式保留完整研究深度和条件管理。"}</p><button data-tab="tasks">选择交付任务 →</button></div><div class="card"><h3>当前工作</h3><p>${E(state.context.working || "还没有记录当前目标。可以写下这周要解决的问题、已确定的方向和暂时不做的事。")}</p><button class="small" data-tab="context">维护项目上下文</button><div class="help">已确认交付物会自动进入检索；草稿只有被你显式勾选时才进入下游任务，并附带醒目警告。</div></div></div><div class="stats"><div class="stat"><b>${docs.filter((d) => d.kind === "upload").length}</b><span>已导入资料</span></div><div class="stat"><b>${jobs.filter((j) => !j.archived && (j.status === "completed" || j.review_decision === "accepted")).length}</b><span>已完成任务</span></div><div class="stat"><b>${docs.filter((d) => d.kind === "accepted").length}</b><span>已确认交付物</span></div></div><div class="section-title"><h2>最近的工作</h2><button class="small" data-tab="outputs">全部记录</button></div><div class="card">${jobRows(jobs.filter((j) => !j.archived).slice(0, 4))}</div>`;
+    `<div class="grid"><div class="card hero"><div class="eyebrow">这次，要完成什么？</div><h2>一次推进一项工作，<br>留下可以继续用的成果。</h2><p>${state.project.workflow_mode === "fast" ? "快速模式只有三份主交付物：新品需求分析、核心 PRD、开发验收清单。评论、政策、日志、截图和研究资料作为证据附件保留在资料索引，正文只引用相关结论。" : "完整模式保留完整研究深度和条件管理。"}</p><button data-tab="tasks">选择交付任务 →</button></div><div class="card"><h3>当前工作</h3><p>${E(state.context.working || "还没有记录当前目标。可以写下这周要解决的问题、已确定的方向和暂时不做的事。")}</p><button class="small" data-tab="context">维护项目上下文</button><div class="help">已确认交付物会自动进入检索；草稿只有被你显式勾选时才进入下游任务，并附带醒目警告。</div></div></div><div class="stats"><div class="stat"><b>${docs.filter((d) => d.kind === "upload").length}</b><span>已导入资料</span></div><div class="stat"><b>${jobs.filter((j) => !j.archived && (j.status === "completed" || j.review_decision === "accepted")).length}</b><span>已完成任务</span></div><div class="stat"><b>${docs.filter((d) => d.kind === "accepted").length}</b><span>已确认交付物</span></div></div><div class="section-title"><h2>最近的工作</h2><button class="small" data-tab="outputs">全部记录</button></div><div class="card">${jobRows(jobs.filter((j) => !j.archived).slice(0, 4))}</div>`;
 }
 function drawContext() {
   $("#view").innerHTML =
-    `${state.mode_mismatch_count ? `<div class="banner">有 ${state.mode_mismatch_count} 个历史任务使用了与当前项目不同的工作流模式。历史任务不会被修改；任务记录会显示它生成时的模式。</div>` : ""}<form id="context-form"><div class="grid"><div class="card context-card"><div class="eyebrow">01 / 长期背景</div><h2>这个项目是什么</h2><p>目标用户、地区、技术约束和长期决策。</p><textarea id="foundation" maxlength="12000" aria-label="长期背景" placeholder="目标用户：\n地区：\n技术约束：\n长期决策：">${E(state.context.foundation)}</textarea><small>每次任务自动带入；不知道的内容可以暂留空。</small></div><div class="card context-card"><div class="eyebrow">02 / 当前工作</div><h2>现在推进到哪里</h2><p>当前目标、已确认决策、正在解决的问题。</p><textarea id="working" maxlength="12000" aria-label="当前工作" placeholder="当前目标：\n已确认决策：\n待解决问题：\n本轮不做：">${E(state.context.working)}</textarea><small>迭代变化时更新；执行过的任务仍保留当时快照。</small></div></div><div class="grid"><div><label for="workflow-mode">工作流模式</label><select id="workflow-mode"><option value="fast" ${state.project.workflow_mode === "fast" ? "selected" : ""}>快速迭代（默认）</option><option value="full" ${state.project.workflow_mode === "full" ? "selected" : ""}>完整研究</option></select></div><div><label for="platform">目标平台</label><input id="platform" maxlength="80" value="${E(state.project.platform)}" placeholder="Android-first"></div><div><label for="timebox">验证周期</label><input id="timebox" maxlength="80" value="${E(state.project.timebox)}" placeholder="1–2 周"></div><div><label for="team">团队与资源</label><input id="team" maxlength="1000" value="${E(state.project.team)}" placeholder="例如：1 产品、1 Android、设计兼职、无专职 QA"></div></div><label for="brief">项目简介</label><textarea id="brief" maxlength="12000">${E(state.project.brief)}</textarea><div id="mode-help" class="help">切换模式只影响之后准备的新任务；历史任务继续保留生成时的模式和输入快照。</div><button class="primary" type="submit">保存项目背景</button></form><section class="danger-zone"><div><h2>删除项目</h2><p>项目将从工作台移入回收站，之后可以恢复。</p></div><button class="danger" data-action="delete-project">删除这个项目</button></section>`;
+    `${state.mode_mismatch_count ? `<div class="banner">有 ${state.mode_mismatch_count} 个历史任务使用了与当前项目不同的工作流模式。历史任务不会被修改；任务记录会显示它生成时的模式。</div>` : ""}<form id="context-form"><div class="grid"><div class="card context-card"><div class="eyebrow">01 / 长期背景</div><h2>这个项目是什么</h2><p>目标用户、地区、技术约束和长期决策。</p><textarea id="foundation" maxlength="12000" aria-label="长期背景" placeholder="目标用户：\n地区：\n技术约束：\n长期决策：">${E(state.context.foundation)}</textarea><small>每次任务自动带入；不知道的内容可以暂留空。</small></div><div class="card context-card"><div class="eyebrow">02 / 当前工作</div><h2>现在推进到哪里</h2><p>当前目标、已确认决策、正在解决的问题。</p><textarea id="working" maxlength="12000" aria-label="当前工作" placeholder="当前目标：\n已确认决策：\n待解决问题：\n本轮不做：">${E(state.context.working)}</textarea><small>迭代变化时更新；执行过的任务仍保留当时快照。</small></div></div><div class="grid"><div><label for="workflow-mode">工作流模式</label><select id="workflow-mode"><option value="fast" ${state.project.workflow_mode === "fast" ? "selected" : ""}>快速迭代（默认）</option><option value="full" ${state.project.workflow_mode === "full" ? "selected" : ""}>完整研究</option></select></div><div><label for="platform">目标平台（可选）</label><select id="platform">${platformSelect(state.project.platform)}</select></div></div><label for="brief">项目简介</label><textarea id="brief" maxlength="12000">${E(state.project.brief)}</textarea><div id="mode-help" class="help">目标平台可选：Android、iOS 或双平台；不确定时可选择“未指定”。验证周期和团队资源不再作为项目输入项。切换模式只影响之后准备的新任务；历史任务继续保留生成时的模式和输入快照。</div><button class="primary" type="submit">保存项目背景</button></form><section class="danger-zone"><div><h2>删除项目</h2><p>项目将从工作台移入回收站，之后可以恢复。</p></div><button class="danger" data-action="delete-project">删除这个项目</button></section>`;
   $("#workflow-mode").onchange = () => {
     $("#mode-help").textContent = `保存后只影响新任务。已有 ${state.jobs.length} 个历史任务仍保留各自的生成模式。`;
   };
@@ -204,8 +250,6 @@ function drawContext() {
         brief: $("#brief").value,
         workflow_mode: $("#workflow-mode").value,
         platform: $("#platform").value,
-        team: $("#team").value,
-        timebox: $("#timebox").value,
       });
       await refresh();
       toast("项目背景已保存");
@@ -254,8 +298,12 @@ function conditionForm(item = {}) {
   };
 }
 function drawMaterials() {
+  const scraper = state.integrations?.review_scraper || {};
+  const scrapes = state.scrapes || [];
+  const scrapeRows = scrapes.slice(0, 8).map((item) => `<div class="row"><div class="row-main"><h3>${E(item.platform === "app_store" ? "App Store" : "Google Play")} · ${E(item.app_id)}</h3><p>${E((item.request && (() => { try { return JSON.parse(item.request).countries?.join(", ") || ""; } catch (_) { return ""; } })()) || "")} · ${date(item.created)}${item.review_count ? ` · ${item.review_count} 条评论` : ""}${item.warning_count ? ` · ${item.warning_count} 条提示` : ""}</p>${item.error ? `<small class="scrape-error">${E(item.error)}</small>` : ""}</div><span class="tag ${["failed", "cancelled"].includes(item.status) ? "bad" : ["queued", "running"].includes(item.status) ? "run" : item.status === "empty" ? "warn" : ""}">${E(scrapeStatusNames[item.status] || item.status)}</span>${item.result_doc_id ? `<button class="small" data-document="${E(item.result_doc_id)}">查看评论 CSV</button>` : ""}${["queued", "running"].includes(item.status) ? `<button class="small" data-cancel-scrape="${E(item.id)}">取消</button>` : ""}</div>`).join("") || '<div class="empty compact">还没有评论采集记录。</div>';
+  const images = imageDocuments();
   $("#view").innerHTML =
-    `<div class="section-title"><h2>资料直接进入新品分析、PRD 和验收。</h2></div><div class="drop"><strong>导入竞品评论、政策、日志、截图和研究资料</strong><p class="muted">MD · TXT · CSV · JSON · 文本 PDF · DOCX · PNG · JPG · WEBP，每份最大 12 MB</p><input type="file" id="upload" multiple accept=".md,.txt,.csv,.json,.pdf,.docx,.png,.jpg,.jpeg,.webp" aria-label="选择要导入的资料"><small>上传后在本机保存和解析。生成任务时请勾选重点资料；被勾选的截图会作为图片输入发送给模型。</small></div><div class="searchbar"><input id="search-query" placeholder="搜索项目资料和已有方法，例如：竞品差异 权限要求" aria-label="检索关键词"><button id="search">检索依据</button></div><div id="search-results"></div><div class="section-title"><h2>资料目录</h2><span class="muted">${state.documents.length} 份</span></div><div class="card">${state.documents.map((d) => `<div class="row"><div class="row-main"><h3>${E(d.name)}</h3><p>${E(kinds[d.kind])} · ${d.characters.toLocaleString()} 字符 · ${date(d.created)}</p></div><button class="small" data-document="${E(d.id)}">读原文</button></div>`).join("") || '<div class="empty">还没有资料。上传后即可检索和引用。</div>'}</div>`;
+    `<div class="section-title"><div><h2>资料作为证据进入资料索引。</h2><p class="muted">评论 CSV、政策、日志、截图和研究资料会保留为附件；正文只摘取与产品决策相关的结论，不复制整份原始数据。</p></div><a class="button-link" href="/api/projects/${encodeURIComponent(projectId)}/export">导出完整项目</a></div><div class="card scraper-card"><div class="section-title"><div><h2>竞品评论采集</h2><p class="muted">只调用桌面工具的评论采集功能，采集结果会自动保存为当前项目 CSV 资料。</p></div><button class="primary small" data-action="review-scrape">${scraper.ready ? "开始采集" : "配置并采集"}</button></div><p class="help">${E(scraper.message || "正在检测桌面竞品评论工具")} ${scraper.root ? `· 当前目录：${E(scraper.root)}` : ""}</p><div class="scrape-list">${scrapeRows}</div></div><div class="drop"><strong>导入竞品评论、政策、日志、截图和研究资料</strong><p class="muted">MD · TXT · CSV · JSON · 文本 PDF · DOCX · PNG · JPG · WEBP，每份最大 12 MB</p><input type="file" id="upload" multiple accept=".md,.txt,.csv,.json,.pdf,.docx,.png,.jpg,.jpeg,.webp" aria-label="选择要导入的资料"><small>上传后在本机保存和解析。生成任务时请勾选重点资料；被勾选的截图会作为图片输入发送给模型。</small></div><div class="searchbar"><input id="search-query" placeholder="搜索项目资料和已有方法，例如：竞品差异 权限要求" aria-label="检索关键词"><button id="search">查找依据</button></div><div class="help">“查找依据”会在当前项目已上传的资料和工作台知识库中搜索相关片段，帮助你核对来源、补充交付物内容；它不会自动修改项目或直接生成结论。</div><div id="search-results"></div><div class="section-title"><div><h2>资料目录</h2><p class="muted">${state.documents.length} 份资料${images.length ? ` · ${images.length} 张项目图片` : ""}</p></div></div><div class="card">${state.documents.map((d) => { const isImage = images.some((image) => image.id === d.id); return `<div class="row"><div class="row-main material-row">${isImage ? `<img class="asset-thumb" src="/api/assets/${encodeURIComponent(projectId)}/${encodeURIComponent(d.id)}" alt="${E(d.name)}">` : ""}<div><h3>${E(d.name)}</h3><p>${E(kinds[d.kind])} · ${d.characters.toLocaleString()} 字符 · ${date(d.created)}</p></div></div><div class="actions"><button class="small" data-document="${E(d.id)}">读原文</button>${isImage ? `<button class="danger small" data-delete-image="${E(d.id)}">删除图片</button>` : ""}</div></div>`; }).join("") || '<div class="empty">还没有资料。上传后即可检索和引用。</div>'}</div>`;
   $("#upload").onchange = upload;
   $("#search").onclick = search;
   $("#search-query").onkeydown = (e) => {
@@ -371,14 +419,77 @@ function confirmPermanentDeleteTrash(id, name) {
 }
 function drawCapabilities() {
   const globalStats = state.runtime.global || {},
-    projectStats = state.runtime.project || {};
+    projectStats = state.runtime.project || {},
+    lanhu = state.integrations?.lanhu || {};
   $("#content").innerHTML =
-    `<div class="heading"><div><div class="eyebrow">CAPABILITY LIBRARY</div><h1>让工作台随工作生长。</h1><p>启用能力后，项目中会出现对应任务。任务、资料和交付物仍使用同一套工作方式。</p></div><button data-tab="overview">返回项目</button></div><div class="grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag">${p.enabled ? "已启用" : "可启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用此能力" : "启用此能力"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="card">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.status === "manual" ? "warn" : ""}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}</div><div class="section-title"><h2>运行环境</h2></div><div class="card"><p>生成模型：<span class="mono">${E(state.runtime.model)}</span></p><p>知识来源：${state.runtime.knowledge_count} 份已启用方法、模板与案例。</p><p>检索方式：${E(state.runtime.retrieval)}。</p><p>全局知识索引：${state.runtime.global_index ? `${globalStats.sources || 0} 个来源 / ${globalStats.chunks || 0} 个片段` : "未建立或当前不可用"}</p><p>项目隔离索引：${state.runtime.project_index ? `${projectStats.sources || 0} 份资料 / ${projectStats.chunks || 0} 个片段` : "将在首次检索时建立"}</p>${state.runtime.fallback ? '<div class="banner">Hybrid RAG 当前已自动回退关键词检索，不会阻断资料准备和文档生成。</div>' : ""}<div class="help">检索结果继续展示来源和原文，便于检查生成依据；向量 ID、内部得分和索引治理字段不会进入任务正文。扩展新工具仍需实现后端适配器，添加名字不会自动获得工具能力。</div></div>`;
+    `<div class="heading"><div><div class="eyebrow">CAPABILITY LIBRARY</div><h1>让工作台随工作生长。</h1><p>启用能力后，项目中会出现对应任务。任务、资料和交付物仍使用同一套工作方式。</p></div><button data-tab="overview">返回项目</button></div><div class="grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag">${p.enabled ? "已启用" : "可启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用此能力" : "启用此能力"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="card">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.status === "manual" ? "warn" : ""}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}</div><div class="section-title"><h2>Lanhu MCP</h2></div><div class="card"><div class="row"><div class="row-main"><h3>蓝湖原型读取</h3><p>${E(lanhu.message || "尚未检测")}</p><p class="muted">配置来源：${E(lanhu.source || "本机 Codex 配置")} · 认证值不会显示或写入工作台。</p></div><span class="tag ${lanhu.ready ? "" : "warn"}">${lanhu.ready ? "配置可用" : "需要配置"}</span></div><div class="actions"><button class="primary small" data-action="lanhu-config">配置 / 重新检测</button><span class="help">未安装时请先安装 Node.js，再运行 npx -y mcp-lanhu；也可以继续上传截图或 PRD。</span></div></div><div class="section-title"><h2>运行环境</h2></div><div class="card"><p>生成模型：<span class="mono">${E(state.runtime.model)}</span></p><p>知识来源：${state.runtime.knowledge_count} 份已启用方法、模板与案例。</p><p>检索方式：${E(state.runtime.retrieval)}。</p><p>全局知识索引：${state.runtime.global_index ? `${globalStats.sources || 0} 个来源 / ${globalStats.chunks || 0} 个片段` : "未建立或当前不可用"}</p><p>项目隔离索引：${state.runtime.project_index ? `${projectStats.sources || 0} 份资料 / ${projectStats.chunks || 0} 个片段` : "将在首次检索时建立"}</p>${state.runtime.fallback ? '<div class="banner">Hybrid RAG 当前已自动回退关键词检索，不会阻断资料准备和文档生成。</div>' : ""}<div class="help">检索结果继续展示来源和原文，便于检查生成依据；向量 ID、内部得分和索引治理字段不会进入任务正文。扩展新工具仍需实现后端适配器，添加名字不会自动获得工具能力。</div></div>`;
+}
+function lanhuConfigForm() {
+  const config = state.integrations?.lanhu || {};
+  modal(
+    "配置 Lanhu MCP",
+    `<h2>让工作台读取本机蓝湖连接。</h2><p class="muted">工作台只保存启动配置，不保存 Cookie、Token 或其他认证值。保存后会重新检测本机环境。</p><form id="lanhu-config-form"><label for="lanhu-command">启动命令</label><input id="lanhu-command" value="${E(config.command || "npx")}" readonly><label for="lanhu-package">MCP 包</label><input id="lanhu-package" value="${E(config.package || "mcp-lanhu")}" readonly><label for="lanhu-config-path">配置文件路径（可选）</label><input id="lanhu-config-path" maxlength="500" value="${E(config.config_path || "")}" placeholder="默认读取 ~/.codex/config.toml"><div class="help">未安装时：先安装 Node.js，再运行 <code>npx -y mcp-lanhu</code>。认证仍由你本机的 Codex 配置提供。</div><div class="actions"><button class="primary" type="submit">保存并检测</button><button type="button" data-close-modal>取消</button></div></form>`,
+  );
+  $("#lanhu-config-form").onsubmit = async (event) => {
+    event.preventDefault();
+    event.submitter.disabled = true;
+    try {
+      await api("/api/integrations/lanhu", {
+        command: $("#lanhu-command").value,
+        package: $("#lanhu-package").value,
+        config_path: $("#lanhu-config-path").value,
+        enabled: true,
+      });
+      close();
+      await refresh();
+      tab = "capabilities";
+      draw();
+      toast("Lanhu MCP 配置已保存并完成环境检测");
+    } catch (err) {
+      error(err);
+      event.submitter.disabled = false;
+    }
+  };
+}
+function imageDocuments() {
+  return (state?.documents || []).filter((document) => document.kind === "upload" && imageSuffixes.has(String(document.name).split(".").pop().toLowerCase()));
+}
+function reviewScrapeForm() {
+  const config = state.integrations?.review_scraper || {};
+  modal(
+    "采集竞品评论",
+    `<h2>把竞品评论直接放进项目资料</h2><p class="muted">输入 Google Play package name 或 App Store app ID。只采集原始评论，不调用桌面工具的分析和翻译功能。</p><form id="review-scrape-form"><label for="scrape-platform">平台</label><select id="scrape-platform"><option value="google_play">Google Play</option><option value="app_store">App Store</option></select><label for="scrape-app-id">应用 ID</label><input id="scrape-app-id" required maxlength="200" placeholder="例如：com.example.app"><label for="scrape-countries">国家或地区代码</label><input id="scrape-countries" required value="us" placeholder="例如：us,gb,de"><div class="grid"><div><label for="scrape-count">每个国家条数</label><input id="scrape-count" type="number" min="1" max="500" value="100"></div><div><label for="scrape-sort">排序</label><select id="scrape-sort"><option value="newest">最新</option><option value="relevant">相关</option></select></div><div><label for="scrape-date-from">开始日期（可选）</label><input id="scrape-date-from" type="date"></div><div><label for="scrape-date-to">结束日期（可选）</label><input id="scrape-date-to" type="date"></div></div><label for="scrape-root">桌面工具目录</label><input id="scrape-root" maxlength="500" value="${E(config.root || "")}" placeholder="C:\\Users\\simon\\Desktop\\competitor-analysis-platform"><div class="help">${E(config.message || "保存目录后会自动检测 app/scrapers.py 和 Python 环境。")}</div><div class="actions"><button class="primary" type="submit">保存配置并开始采集</button><button type="button" data-close-modal>取消</button></div></form>`,
+  );
+  $("#review-scrape-form").onsubmit = async (event) => {
+    event.preventDefault();
+    event.submitter.disabled = true;
+    try {
+      await api("/api/integrations/review-scraper", { root: $("#scrape-root").value, enabled: true });
+      const result = await api("/api/reviews/scrape", {
+        project_id: projectId,
+        platform: $("#scrape-platform").value,
+        app_id: $("#scrape-app-id").value,
+        countries: $("#scrape-countries").value.split(/[,，\s]+/).filter(Boolean),
+        count_per_country: Number($("#scrape-count").value),
+        sort: $("#scrape-sort").value,
+        date_from: $("#scrape-date-from").value,
+        date_to: $("#scrape-date-to").value,
+      });
+      close();
+      await refresh();
+      tab = "materials";
+      draw();
+      toast(`评论采集已开始（${result.id.slice(0, 8)}）`);
+    } catch (err) {
+      error(err);
+      event.submitter.disabled = false;
+    }
+  };
 }
 function newProject() {
   modal(
     "新建项目",
-    `<h2>先留下项目的起点。</h2><form id="new-form"><label for="project-name">项目名称</label><input id="project-name" required maxlength="100" placeholder="例如：GBA Emulator"><div class="grid"><div><label for="new-workflow-mode">工作流模式</label><select id="new-workflow-mode"><option value="fast">快速迭代（默认）</option><option value="full">完整研究</option></select></div><div><label for="new-platform">目标平台</label><input id="new-platform" maxlength="80" value="Android-first"></div><div><label for="new-timebox">验证周期</label><input id="new-timebox" maxlength="80" value="1–2 周"></div><div><label for="new-team">团队与资源</label><input id="new-team" maxlength="1000" placeholder="1 产品、1 Android、设计兼职、无专职 QA"></div></div><label for="project-brief">想做什么，已经确定了什么？</label><textarea id="project-brief" maxlength="12000" placeholder="描述产品方向、对标竞品、核心能力和已知硬约束。暂时不知道的可以留空。"></textarea><div class="help">快速模式默认品类已决定，不执行机会门否决。新建项目不会自动启动分析。</div><button class="primary" type="submit">创建项目</button></form>`,
+    `<h2>先留下项目的起点。</h2><form id="new-form"><label for="project-name">项目名称</label><input id="project-name" required maxlength="100" placeholder="例如：GBA Emulator"><div class="grid"><div><label for="new-workflow-mode">工作流模式</label><select id="new-workflow-mode"><option value="fast">快速迭代（默认）</option><option value="full">完整研究</option></select></div><div><label for="new-platform">目标平台（可选）</label><select id="new-platform">${platformSelect("")}</select></div></div><label for="project-brief">想做什么，已经确定了什么？</label><textarea id="project-brief" maxlength="12000" placeholder="描述产品方向、对标竞品、核心能力和已知硬约束。暂时不知道的可以留空。"></textarea><div class="help">平台可选 Android、iOS 或双平台；不确定时可选择“未指定”。验证周期和团队资源不再作为项目输入项。快速模式默认品类已决定，不执行机会门否决。新建项目不会自动启动分析。</div><button class="primary" type="submit">创建项目</button></form>`,
   );
   $("#new-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -390,8 +501,6 @@ function newProject() {
         brief: $("#project-brief").value,
         workflow_mode: $("#new-workflow-mode").value,
         platform: $("#new-platform").value,
-        team: $("#new-team").value,
-        timebox: $("#new-timebox").value,
       });
       projectId = p.id;
       localStorage.setItem("workbench-project", projectId);
@@ -402,6 +511,37 @@ function newProject() {
     } catch (e) {
       error(e);
       b.disabled = false;
+    }
+  };
+}
+function importProjectDialog() {
+  modal(
+    "导入完整项目",
+    `<h2>恢复或复制一个工作台项目</h2><p class="muted">选择由工作台导出的 .zip 项目包。导入会创建一个新的项目副本，不覆盖当前项目。</p><form id="project-import-form"><label for="project-package">项目包</label><input id="project-package" type="file" accept=".zip,application/zip" required><div class="help">项目背景、资料、图片、任务、版本、批注和评论采集记录会一起导入；正在执行的任务会标记为已中断，需要重新开始。</div><div class="actions"><button class="primary" type="submit">导入项目</button><button type="button" data-close-modal>取消</button></div></form>`,
+  );
+  $("#project-import-form").onsubmit = async (event) => {
+    event.preventDefault();
+    event.submitter.disabled = true;
+    try {
+      const file = $("#project-package").files?.[0];
+      if (!file) throw Error("请选择项目包");
+      if (file.size > 200 * 1024 * 1024) throw Error("项目包超过 200 MB");
+      const content = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1]);
+        reader.onerror = () => reject(Error("项目包读取失败"));
+        reader.readAsDataURL(file);
+      });
+      const project = await api("/api/projects/import", { content });
+      projectId = project.id;
+      localStorage.setItem("workbench-project", projectId);
+      tab = "overview";
+      close();
+      await refresh();
+      toast(`项目「${project.name}」已导入`);
+    } catch (err) {
+      error(err);
+      event.submitter.disabled = false;
     }
   };
 }
@@ -476,6 +616,7 @@ function renderMarkdown(text, annotate = false, comments = []) {
   // Escape before formatting. Raw HTML and embedded media are never executed.
   const inline = (s) =>
     E(s)
+      .replace(/!\[([^\]]*)\]\(asset:\/\/([a-f0-9]{16,64})\)/gi, (_, alt, id) => `<img class="document-image" src="/api/assets/${encodeURIComponent(projectId || "")}/${id}" alt="${E(alt || "项目图片")}">`)
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
       .replace(/`([^`]+)`/g, "<code>$1</code>");
   const plain = (s) =>
@@ -606,6 +747,11 @@ function commentsPanel(job) {
     )
     .join("") || '<div class="empty compact">当前版本还没有批注。</div>'}</div>${historyCount ? `<p class="muted">另有 ${historyCount} 条旧版本批注，仅保留为历史记录，不会用于本次修订。</p>` : ""}</section>`;
 }
+function qualitySummary(job) {
+  const quality = job.quality || { issues: [], errors: 0, warnings: 0, ok: true };
+  if (!quality.issues?.length) return '<div class="quality-check quality-ok">轻量质量校验：已通过，未发现阻断项。</div>';
+  return `<div class="quality-check ${quality.errors ? "quality-has-errors" : "quality-has-warnings"}"><strong>轻量质量校验：${quality.errors ? `${quality.errors} 个阻断项` : "无阻断项"}${quality.warnings ? ` · ${quality.warnings} 个提示` : ""}</strong><ul>${quality.issues.map((issue) => `<li class="${issue.severity === "error" ? "quality-error" : "quality-warning"}"><span class="tag ${issue.severity === "error" ? "bad" : "warn"}">${issue.severity === "error" ? "阻断" : "提示"}</span> ${E(issue.message)}${issue.hint ? `<small>建议：${E(issue.hint)}</small>` : ""}</li>`).join("")}</ul></div>`;
+}
 function showJob(job) {
   activeJob = job.id;
   const running = ["running", "queued"].includes(job.status),
@@ -614,11 +760,13 @@ function showJob(job) {
     reviewReasons = [
       job.open_comment_count ? `当前版本还有 ${job.open_comment_count} 条待处理批注` : "",
       (job.citation_issues || []).length ? `正文包含无法追溯的来源：${job.citation_issues.join("、")}` : "",
+      (job.asset_issues || []).length ? `正文包含不存在的项目图片：${job.asset_issues.join("、")}` : "",
+      ...(job.quality?.issues || []).filter((issue) => issue.severity === "error").map((issue) => issue.message),
     ].filter(Boolean),
     reviewBlocked = reviewReasons.length > 0,
     reviewReason = reviewReasons.join("；");
   const outputHtml = job.output
-    ? `<div class="actions"><button class="primary" data-edit="${E(job.id)}">编辑正文</button><button data-versions="${E(job.id)}">版本记录（${job.version_count || 1}）</button><a href="/api/jobs/${E(job.id)}/download">下载 Markdown</a><span class="tag">${review ? (review.decision === "accepted" ? "已确认 · 可用于后续任务" : "需要修改") : "尚未评审"}</span></div>${reviewBlocked ? `<div class="banner" id="review-block-reason">暂不能确认：${E(reviewReason)}。请处理后再确认。</div>` : ""}<div class="document document-render">${renderMarkdown(job.output, true, (job.comments || []).filter((item) => item.version === job.current_version))}</div>${commentsPanel(job)}<div class="help">评审重点：核心场景是否齐全、关键结论是否有证据、异常与边界是否闭合。确认只作用于此项目，不会自动发布为全局知识。</div><label for="review-note">整份文档评审（可选）</label><textarea id="review-note" maxlength="12000" placeholder="这里用于整份文档的总体意见；局部修改请直接在正文旁添加批注。">${E(review?.note || "")}</textarea><div class="actions review-actions"><button class="primary" data-review="accepted" data-id="${E(job.id)}" ${reviewBlocked ? 'disabled aria-describedby="review-block-reason"' : ""}>确认这份交付物</button><button data-review="changes_requested" data-id="${E(job.id)}">记录整体修改意见</button></div>`
+    ? `<div class="actions"><button class="primary" data-edit="${E(job.id)}">编辑正文</button><button data-versions="${E(job.id)}">版本记录（${job.version_count || 1}）</button><a href="/api/jobs/${E(job.id)}/download">下载 Markdown</a><a href="/api/jobs/${E(job.id)}/export?format=docx">Word</a><a href="/api/jobs/${E(job.id)}/export?format=pdf">PDF</a><a href="/api/jobs/${E(job.id)}/export?format=xlsx">Excel</a><a href="/api/jobs/${E(job.id)}/export?format=csv">CSV</a><span class="tag">${review ? (review.decision === "accepted" ? "已确认 · 可用于后续任务" : "需要修改") : "尚未评审"}</span></div>${qualitySummary(job)}${reviewBlocked ? `<div class="banner" id="review-block-reason">暂不能确认：${E(reviewReason)}。请处理后再确认。</div>` : ""}<div class="document document-render">${renderMarkdown(job.output, true, (job.comments || []).filter((item) => item.version === job.current_version))}</div>${commentsPanel(job)}<div class="help">评审重点：核心场景是否齐全、关键结论是否有证据、异常与边界是否闭合。确认只作用于此项目，不会自动发布为全局知识。</div><label for="review-note">整份文档评审（可选）</label><textarea id="review-note" maxlength="12000" placeholder="这里用于整份文档的总体意见；局部修改请直接在正文旁添加批注。">${E(review?.note || "")}</textarea><div class="actions review-actions"><button class="primary" data-review="accepted" data-id="${E(job.id)}" ${reviewBlocked ? 'disabled aria-describedby="review-block-reason"' : ""}>确认这份交付物</button><button data-review="changes_requested" data-id="${E(job.id)}">记录整体修改意见</button></div>`
     : "";
   modal(
     "任务记录",
@@ -659,10 +807,22 @@ function commentForm(job, block) {
   };
 }
 function editJob(job) {
+  const images = imageDocuments();
   modal(
     "编辑交付物",
-    `<div class="split"><h2>${E(job.title)}</h2><span class="tag">当前 V${job.current_version || 1}</span></div><div class="help">按 Markdown 直接修改。保存会生成新版本；如果原文已经确认，确认状态会被清除，新内容回到待评审草稿。</div><form id="edit-output-form"><label for="output-editor">正文</label><textarea id="output-editor" class="output-editor" maxlength="2000000" required>${E(job.output)}</textarea><label for="edit-note">修改说明（选填）</label><input id="edit-note" maxlength="500" placeholder="例如：补充核心流程，删减重复背景"><div class="actions"><button class="primary" type="submit">保存为新版本</button><button type="button" data-edit-cancel="${E(job.id)}">取消</button></div></form>`,
+    `<div class="split"><h2>${E(job.title)}</h2><span class="tag">当前 V${job.current_version || 1}</span></div><div class="help">按 Markdown 直接修改。保存会生成新版本；如果原文已经确认，确认状态会被清除，新内容回到待评审草稿。</div><form id="edit-output-form"><label for="output-editor">正文</label><textarea id="output-editor" class="output-editor" maxlength="2000000" required>${E(job.output)}</textarea><div class="image-insert-panel"><label for="editor-image">插入项目图片</label><div class="actions"><select id="editor-image" ${images.length ? "" : "disabled"}>${images.map((image) => `<option value="${E(image.id)}" data-name="${E(image.name)}">${E(image.name)}</option>`).join("") || '<option>请先在“资料与检索”上传图片</option>'}</select><input id="editor-image-caption" maxlength="120" placeholder="图片说明（可选）"><button type="button" id="insert-image" ${images.length ? "" : "disabled"}>插入到光标处</button></div><small>图片会以项目内部 asset:// 引用写入正文，导出 Word/PDF 时会一并带入。</small></div><label for="edit-note">修改说明（选填）</label><input id="edit-note" maxlength="500" placeholder="例如：补充核心流程，删减重复背景"><div class="actions"><button class="primary" type="submit">保存为新版本</button><button type="button" data-edit-cancel="${E(job.id)}">取消</button></div></form>`,
   );
+  if (images.length) {
+    $("#insert-image").onclick = () => {
+      const selector = $("#editor-image"), image = images.find((item) => item.id === selector.value);
+      if (!image) return;
+      const editor = $("#output-editor"), caption = $("#editor-image-caption").value.trim() || image.name;
+      const snippet = `![${caption}](asset://${image.id})`;
+      const start = editor.selectionStart ?? editor.value.length, end = editor.selectionEnd ?? start;
+      editor.setRangeText(snippet, start, end, "end");
+      editor.focus();
+    };
+  }
   $("#edit-output-form").onsubmit = async (event) => {
     event.preventDefault();
     event.submitter.disabled = true;
@@ -729,6 +889,10 @@ document.addEventListener("click", async (e) => {
     else if (b.dataset.action === "capabilities") {
       tab = "capabilities";
       draw();
+    } else if (b.dataset.action === "lanhu-config") {
+      lanhuConfigForm();
+    } else if (b.dataset.action === "review-scrape") {
+      reviewScrapeForm();
     } else if (b.dataset.pack) {
       b.disabled = true;
       await api("/api/packs", {
@@ -784,11 +948,19 @@ document.addEventListener("click", async (e) => {
       await refresh();
       showJob(job);
       toast("已按当前版本的待处理批注准备修订任务");
+    } else if (b.dataset.deleteImage) {
+      const image = imageDocuments().find((item) => item.id === b.dataset.deleteImage);
+      if (!image) throw Error("图片资料不存在或已被删除");
+      if (!window.confirm(`确定删除图片“${image.name}”？只有未被正文、历史版本或任务引用的图片可以删除。`)) return;
+      b.disabled = true;
+      await api(`/api/documents/${encodeURIComponent(image.id)}/delete`, { project_id: projectId });
+      await refresh();
+      toast(`图片「${image.name}」已删除`);
     } else if (b.dataset.document) {
       const d = await api("/api/documents/" + b.dataset.document);
       modal(
         "资料原文",
-        `<h2>${E(d.name)}</h2><div class="document">${E(d.text)}</div>`,
+        `<h2>${E(d.name)}</h2>${imageSuffixes.has(String(d.name).split(".").pop().toLowerCase()) ? `<img class="document-image document-image-preview" src="/api/assets/${encodeURIComponent(projectId)}/${encodeURIComponent(d.id)}" alt="${E(d.name)}">` : ""}<div class="document">${E(d.text)}</div>`,
       );
     } else if (b.dataset.run) {
       b.disabled = true;
@@ -798,6 +970,11 @@ document.addEventListener("click", async (e) => {
       b.disabled = true;
       showJob(await api("/api/jobs/" + b.dataset.cancel + "/cancel", {}));
       await refresh();
+    } else if (b.dataset.cancelScrape) {
+      b.disabled = true;
+      await api(`/api/reviews/scrape/${b.dataset.cancelScrape}/cancel`, {});
+      await refresh();
+      toast("评论采集已取消");
     } else if (b.dataset.restoreCancelled) {
       b.disabled = true;
       showJob(
@@ -860,6 +1037,7 @@ $("#capabilities").onclick = () => {
   tab = "capabilities";
   draw();
 };
+$("#import-project").onclick = importProjectDialog;
 $("#trash").onclick = () => {
   tab = "trash";
   draw();
@@ -869,7 +1047,8 @@ setInterval(async () => {
   const running = state.jobs?.some((j) =>
     ["queued", "running"].includes(j.status),
   );
-  if (!running) return;
+  const runningScrapes = state.scrapes?.some((item) => ["queued", "running"].includes(item.status));
+  if (!running && !runningScrapes) return;
   polling = true;
   try {
     const previous = activeJob
@@ -881,7 +1060,7 @@ setInterval(async () => {
       state.jobs.find((j) => j.id === activeJob)?.status !== previous
     )
       showJob(await api("/api/jobs/" + activeJob));
-    if (["overview", "outputs"].includes(tab)) draw();
+    if (["overview", "outputs", "materials"].includes(tab)) draw();
   } catch (err) {
     $("#banner").textContent = "连接暂时中断，正在等待本地服务恢复。";
     $("#banner").hidden = false;
