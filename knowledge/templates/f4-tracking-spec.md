@@ -8,13 +8,15 @@ region: [global]
 evidence_level: approved-plan
 status: active
 source: [method-new-product-analysis, template-f2-core-prd, pattern-prd-state-closure]
-reviewed_at: 2026-09-11
+reviewed_at: 2026-09-12
 tags: [F4, 完整埋点, tracking-spec, 蓝湖, PRD, 可编辑]
 ---
 
 # 完整埋点方案
 
-> 本文档面向产品、研发和数据同事。默认使用中文；事件 ID、参数名、SDK 名称和枚举值使用英文。每个事件必须回答一个产品问题，不能机械记录所有按钮。
+> 本文档面向产品、研发和数据同事。默认使用中文；事件 ID、参数名、SDK 名称和枚举值使用英文。每个事件必须来自已确认 F2、用户当前明确要求、原型、截图或交互资料，并回答一个产品问题，不能机械记录所有按钮。
+
+来源不足时：如果无法确认页面、状态和交互，只填写第 0、1、7 节的资料缺口，不在事件总表和参数表中生成示例或推测行。若用户上传了既有埋点工作簿，优先沿用它的 Sheet 名、列顺序、字段名、事件命名和公式含义。
 
 ## 0. 方案范围
 
@@ -35,13 +37,12 @@ tags: [F4, 完整埋点, tracking-spec, 蓝湖, PRD, 可编辑]
 
 ## 2. 埋点事件总表
 
-> 页面完整展示使用 `_page_display`；普通按钮、返回、关闭和 Tab 合并为 `_page_click`；核心异步业务必须记录最终 `_result`，不能用点击代表成功。
+> 页面完整展示使用 `_page_display`；普通按钮、返回、关闭和 Tab 合并为 `_page_click`；选择变化使用 `_select`；核心异步业务必须记录最终 `_result`，不能用点击代表成功。最终回调未在资料中定义时写“待研发确认”。
 
 | 事件 ID | 中文名称 | 事件类型 | 触发时机 | 分析问题 | 发送平台 | 优先级 | 来源页面 / 状态 |
 |---|---|---|---|---|---|---|---|
-| `xxx_page_display` |  | page_display | 页面完整展示后 |  | Firebase / Amplitude / Umeng | P0 |  |
-| `xxx_page_click` |  | page_click | 用户点击普通操作后 |  |  | P1 |  |
-| `xxx_result` |  | result | 业务或 SDK 回调结束后 |  |  | P0 |  |
+
+没有来源支持的事件不填。发送平台按项目现有 SDK 填写，不默认同时发送 Firebase、Amplitude 和 Umeng。
 
 ## 3. 事件参数表
 
@@ -49,10 +50,8 @@ tags: [F4, 完整埋点, tracking-spec, 蓝湖, PRD, 可编辑]
 
 | 事件 ID | 参数名 | 参数中文名 | 类型 | 枚举值 / 开放值 | 何时上报 | 是否必填 | 隐私与实现说明 |
 |---|---|---|---|---|---|---|---|
-| `xxx_result` | `result` | 结果 | enum | `success` | 最终成功回调 | 是 |  |
-| `xxx_result` | `result` | 结果 | enum | `fail` | 最终失败回调 | 是 |  |
-| `xxx_result` | `result` | 结果 | enum | `cancel` | 用户取消或主动返回 | 是 |  |
-| `xxx_result` | `result` | 结果 | enum | `timeout` | 达到业务超时 | 是 |  |
+
+固定枚举一值一行；只有资料明确存在对应结果时才添加 `success`、`fail`、`cancel` 或 `timeout`，不能套用完整枚举集合。
 
 ## 4. 权限、商业化与异常闭环
 
@@ -60,8 +59,8 @@ tags: [F4, 完整埋点, tracking-spec, 蓝湖, PRD, 可编辑]
 
 | 权限流程 | 展示事件 | 点击事件 | 最终结果事件 | 参数 | 拒绝后的数据问题 |
 |---|---|---|---|---|---|
-| 系统权限请求 | `system_permission_request` |  | `system_permission_result`（确有分析需要时） | `permission_type`、`result` |  |
-| 产品权限说明弹窗 | `permission_dialog_display` | `permission_dialog_click` |  | `permission_type`、`button` |  |
+
+只有 F2 或原型中确有权限流程，且存在明确的数据问题时才填本表。
 
 ### 4.2 异常和恢复
 

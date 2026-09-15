@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "workflows": [
+    {
+      "id": "new-product",
+      "name": "新品开发",
+      "description": "新品已经确定要做：先形成新品分析，再落到核心需求、可选埋点和开发验收。",
+      "prompt": "轻量推进，不设置机会门，不把版本简报和版本复盘作为新品前置步骤。",
+      "modes": ["fast"],
+      "steps": [
+        {"task": "fast/new-product-analysis"},
+        {"task": "fast/core-prd"},
+        {"task": "fast/tracking-spec", "optional": true},
+        {"task": "fast/acceptance"}
+      ]
+    },
+    {
+      "id": "version-iteration",
+      "name": "版本迭代",
+      "description": "已有产品只写本次变化，适合功能、体验、商业化和 Bugfix 版本。",
+      "prompt": "先说明当前状态和本次变化，再进入核心 PRD；产品基线与埋点按需使用。",
+      "modes": ["fast"],
+      "steps": [
+        {"task": "fast/product-baseline", "optional": true},
+        {"task": "fast/version-brief"},
+        {"task": "fast/core-prd"},
+        {"task": "fast/tracking-spec", "optional": true},
+        {"task": "fast/acceptance"},
+        {"task": "fast/version-result", "optional": true}
+      ]
+    },
+    {
+      "id": "competitor-research",
+      "name": "竞品分析",
+      "description": "围绕一个当前问题分析竞品页面、流程、功能、评论和商业化。",
+      "prompt": "竞品资料可以作为产品级资料，也可以关联到一个具体版本。",
+      "modes": ["fast"],
+      "steps": [{"task": "fast/competitor-analysis"}]
+    },
+    {
+      "id": "version-review",
+      "name": "版本复盘",
+      "description": "汇总版本目标、实际变化、数据与反馈，决定保留、继续迭代或回退。",
+      "prompt": "只复盘当前版本，不重写整份需求。没有实际数据时明确为暂无法判断。",
+      "modes": ["fast"],
+      "steps": [{"task": "fast/version-result"}]
+    }
+  ]
+}

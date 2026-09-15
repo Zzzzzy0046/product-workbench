@@ -9,6 +9,292 @@
   --light: #e9eee6;
   --shadow: 0 18px 55px #2338320e;
 }
+
+.heading-tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.version-scope-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.version-scope-card.compact {
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.version-scope-card > span {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.active-version-select {
+  min-width: 190px;
+  margin: 0;
+}
+
+.selected-row {
+  background: rgba(68, 102, 82, 0.07);
+}
+
+.workflow-grid {
+  align-items: stretch;
+}
+
+.workflow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-card button {
+  margin-top: auto;
+}
+
+.workflow-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workflow-preview b {
+  color: var(--accent);
+}
+
+.workflow-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-step {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+
+.workflow-step.done {
+  border-color: rgba(68, 102, 82, 0.45);
+}
+
+.step-index {
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 700;
+}
+
+.standalone-tasks {
+  margin-top: 26px;
+}
+
+.standalone-tasks > summary {
+  cursor: pointer;
+  margin-bottom: 16px;
+  color: var(--muted);
+}
+
+.compact-task {
+  min-height: 190px;
+}
+
+.competitor-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.competitor-facts span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--light);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.competitor-description {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  margin-bottom: 18px;
+}
+
+.review-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+}
+
+.review-toolbar > div:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.review-toolbar .competitor-facts {
+  margin: 0;
+}
+
+.review-list {
+  display: grid;
+  gap: 12px;
+  max-height: 66vh;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.review-card {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--white);
+}
+
+.review-card header,
+.review-card footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.review-card header > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-stars {
+  color: #b95b37;
+  letter-spacing: 1px;
+}
+
+.review-card h3 {
+  margin: 14px 0 4px;
+  font-size: 15px;
+}
+
+.review-content {
+  margin: 14px 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.75;
+}
+
+.review-card footer {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-card footer details {
+  margin: 0;
+  text-align: right;
+}
+
+.review-card footer details small {
+  display: block;
+  margin-top: 6px;
+  text-align: left;
+}
+
+.review-translation,
+.review-reply {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-left: 3px solid #a9bcae;
+  border-radius: 6px;
+  background: #f1f4ee;
+}
+
+.review-reply {
+  border-left-color: #d18361;
+  background: #fbf2eb;
+}
+
+.review-translation p,
+.review-reply p {
+  margin: 5px 0 0;
+  white-space: pre-wrap;
+}
+
+.csv-table-scroll {
+  max-height: 68vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+}
+
+.csv-preview-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.csv-preview-table th,
+.csv-preview-table td {
+  max-width: 420px;
+  padding: 10px 12px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.csv-preview-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #e9eee6;
+  color: var(--green);
+}
+
+@media (max-width: 760px) {
+  .heading-tools,
+  .version-scope-card {
+    align-items: stretch;
+    width: 100%;
+  }
+  .version-scope-card {
+    flex-direction: column;
+  }
+  .workflow-step {
+    grid-template-columns: 34px 1fr;
+  }
+  .workflow-step > button {
+    grid-column: 2;
+  }
+}
 * {
   box-sizing: border-box;
 }

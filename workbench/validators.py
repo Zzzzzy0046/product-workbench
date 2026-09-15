@@ -19,6 +19,93 @@ def _line_for(text: str, values: tuple[str, ...]) -> int | None:
     return None
 
 
+def _table_cells(line: str) -> list[str]:
+    """Split a Markdown table row while keeping validation dependency-free."""
+    value = str(line).strip()
+    if not value or "|" not in value:
+        return []
+    if value.startswith("|"):
+        value = value[1:]
+    if value.endswith("|"):
+        value = value[:-1]
+    return [cell.strip() for cell in value.split("|")]
+
+
+def _is_table_separator(cells: list[str]) -> bool:
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell.replace(" ", "")) for cell in cells)
+
+
+def _markdown_tables(text: str) -> list[dict]:
+    """Return Markdown tables with headers, row cells and one-based line numbers."""
+    lines = str(text).splitlines()
+    tables: list[dict] = []
+    index = 0
+    while index + 1 < len(lines):
+        headers = _table_cells(lines[index])
+        separator = _table_cells(lines[index + 1])
+        if not headers or not _is_table_separator(separator):
+            index += 1
+            continue
+        rows = []
+        cursor = index + 2
+        while cursor < len(lines):
+            cells = _table_cells(lines[cursor])
+            if not cells:
+                break
+            rows.append({"cells": cells, "line": cursor + 1})
+            cursor += 1
+        tables.append({"headers": headers, "rows": rows})
+        index = cursor
+    return tables
+
+
+def _normal_header(value: str) -> str:
+    return re.sub(r"[\s`_*]", "", str(value)).lower()
+
+
+def _column(headers: list[str], *names: str) -> int | None:
+    normalized = [_normal_header(header) for header in headers]
+    for name in names:
+        target = _normal_header(name)
+        for index, header in enumerate(normalized):
+            if header == target or target in header:
+                return index
+    return None
+
+
+def _cell(cells: list[str], index: int | None) -> str:
+    return cells[index].strip() if index is not None and index < len(cells) else ""
+
+
+def _plain_cell(value: str) -> str:
+    return re.sub(r"[`*_]", "", str(value)).strip()
+
+
+def _is_blank_cell(value: str) -> bool:
+    plain = _plain_cell(value)
+    return not plain or plain in {"-", "—", "[填写]", "[待填写]", "待填写", "待补", "N/A"}
+
+
+def _is_prohibition_line(line: str) -> bool:
+    return _has_any(line, ("不得", "禁止", "不要记录", "不记录", "排除", "不可采集", "禁止采集"))
+
+
+def _has_actual_test_evidence(sources: list[dict] | None) -> bool:
+    evidence_words = (
+        "测试报告", "测试记录", "验收记录", "实测", "复测", "设备结果", "构建日志",
+        "技术日志", "运行日志", "崩溃日志", "截图", "录像", "录屏", "抓包",
+    )
+    evidence_suffixes = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".mov", ".log", ".apk", ".aab")
+    for source in sources or []:
+        if not isinstance(source, dict) or source.get("kind") != "upload":
+            continue
+        name = str(source.get("name") or source.get("location") or "")
+        sample = f"{name}\n{str(source.get('text') or '')[:1200]}"
+        if name.lower().endswith(evidence_suffixes) or _has_any(sample, evidence_words):
+            return True
+    return False
+
+
 def validate(
     task_id: str,
     output: str,
@@ -116,19 +203,176 @@ def validate(
             if not _has_any(text, words):
                 issues.append(_issue(f"f2-{code}", "warning", f"未明显找到{label}。", f"建议补充可交给研发执行的{label}。"))
 
+        permission_claim = re.compile(
+            r"(?:相机|摄像头|麦克风|通知|定位|位置|蓝牙|存储|相册|照片|文件|媒体)\s*(?:权限|授权)",
+            re.IGNORECASE,
+        )
+        permission_lines = [
+            line for line in text.splitlines()
+            if permission_claim.search(line) and not _is_blank_cell(line.split(":", 1)[-1])
+        ]
+        recovery_rule = re.compile(
+            r"(?:拒绝|未授权|Denied|不允许).{0,40}(?:重试|再次申请|重新授权|系统设置|设置页|继续使用|返回|降级|提示|不阻塞|恢复)",
+            re.IGNORECASE,
+        )
+        if permission_lines and not recovery_rule.search(text):
+            issues.append(
+                _issue(
+                    "f2-permission-recovery",
+                    "warning",
+                    "正文要求了系统权限，但没有找到用户拒绝后的继续、重试或恢复路径。",
+                    "在对应页面写清拒绝后用户看到什么、还能做什么，以及如何再次授权；不确定的系统行为标记“待研发确认”。",
+                )
+            )
+
+        concrete_value = re.compile(
+            r"(?:\d+(?:\.\d+)?\s*(?:ms|毫秒|秒|分钟|小时|天|次|个|KB|MB|GB|%|美元|美金)|[$￥€]\s*\d+(?:\.\d+)?)",
+            re.IGNORECASE,
+        )
+        rule_cue = re.compile(r"(?:最多|至少|超过|少于|每隔|间隔|等待|限制|上限|下限|默认|连续|保留|缓存|超时|价格|订阅)")
+        unlabelled_rules = []
+        for line_number, line in enumerate(text.splitlines(), 1):
+            if not concrete_value.search(line) or not rule_cue.search(line):
+                continue
+            if re.search(r"\[S[1-9][0-9]*\]|https?://", line):
+                continue
+            if _has_any(line, ("待研发确认", "本轮方案", "本轮拟定", "建议", "示例")):
+                continue
+            unlabelled_rules.append(line_number)
+        if unlabelled_rules:
+            issues.append(
+                _issue(
+                    "f2-unlabelled-specific-rule",
+                    "warning",
+                    f"第 {', '.join(map(str, unlabelled_rules[:5]))} 行出现无来源、也未标为本轮拟定的具体阈值或价格。",
+                    "有资料依据时补 [Sx]；属于产品方案时写“本轮拟定”；依赖实现的数值写“待研发确认”。",
+                )
+            )
+
     elif task_id == "fast/tracking-spec":
-        event_ids = re.findall(r"(?:event\s*id|事件\s*ID|事件ID)\s*[|：:]\s*`?([A-Za-z][A-Za-z0-9_.-]+)", text, re.IGNORECASE)
+        tables = _markdown_tables(text)
+        event_rows: list[dict] = []
+        parameter_rows: list[dict] = []
+        for table in tables:
+            headers = table["headers"]
+            if _column(headers, "事件 ID", "event id") is None:
+                continue
+            if _column(headers, "参数名", "property") is not None:
+                parameter_rows.extend({**row, "headers": headers} for row in table["rows"])
+            elif _column(headers, "事件类型", "中文名称", "分析问题") is not None:
+                event_rows.extend({**row, "headers": headers} for row in table["rows"])
+
+        event_ids = []
+        for row in event_rows:
+            raw_id = _plain_cell(_cell(row["cells"], _column(row["headers"], "事件 ID", "event id")))
+            if re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]+", raw_id):
+                event_ids.append(raw_id)
+        event_ids.extend(
+            re.findall(
+                r"(?:event\s*id|事件\s*ID|事件ID)\s*[：:]\s*`?([A-Za-z][A-Za-z0-9_.-]+)",
+                text,
+                re.IGNORECASE,
+            )
+        )
         duplicates = sorted({item for item in event_ids if event_ids.count(item) > 1})
         if duplicates:
             issues.append(_issue("tracking-duplicate-id", "error", f"埋点事件 ID 重复：{', '.join(duplicates[:8])}。", "每个业务事件只保留一个唯一 ID。"))
+
+        bad_suffix_lines = []
+        click_as_success_lines = []
+        missing_question_lines = []
+        missing_source_lines = []
+        for row in event_rows:
+            headers, cells, line_number = row["headers"], row["cells"], row["line"]
+            event_id = _plain_cell(_cell(cells, _column(headers, "事件 ID", "event id")))
+            event_type = _plain_cell(_cell(cells, _column(headers, "事件类型"))).lower()
+            event_name = _plain_cell(_cell(cells, _column(headers, "中文名称")))
+            trigger = _plain_cell(_cell(cells, _column(headers, "触发时机")))
+            question = _cell(cells, _column(headers, "分析问题"))
+            source = _cell(cells, _column(headers, "来源页面", "来源页面 / 状态", "来源"))
+            if event_id and not re.search(r"_(?:display|click|select|result)$", event_id):
+                bad_suffix_lines.append(line_number)
+            if (event_id.endswith("_click") or "click" in event_type) and (
+                re.search(r"(?:成功|完成|结果|回调).{0,8}(?:后|时|返回)", trigger)
+                or re.search(r"(?:成功|完成|结果)", event_name)
+            ):
+                click_as_success_lines.append(line_number)
+            if _is_blank_cell(question):
+                missing_question_lines.append(line_number)
+            if _is_blank_cell(source):
+                missing_source_lines.append(line_number)
+        if bad_suffix_lines:
+            issues.append(
+                _issue(
+                    "tracking-event-suffix",
+                    "warning",
+                    f"第 {', '.join(map(str, bad_suffix_lines[:8]))} 行的事件 ID 未按 display/click/select/result 语义收口。",
+                    "展示用 _display，点击用 _click，选择用 _select，异步最终结果用 _result。",
+                )
+            )
+        if click_as_success_lines:
+            issues.append(
+                _issue(
+                    "tracking-click-as-success",
+                    "error",
+                    f"第 {', '.join(map(str, click_as_success_lines[:8]))} 行把点击事件当成成功、完成或结果回调。",
+                    "保留 _click 表示意图；真实业务结果由 SDK/业务回调触发独立 _result。",
+                )
+            )
+        if missing_question_lines:
+            issues.append(
+                _issue(
+                    "tracking-missing-question",
+                    "warning",
+                    f"第 {', '.join(map(str, missing_question_lines[:8]))} 行没有说明事件要回答的产品问题。",
+                    "不能回答产品问题的事件应删除；保留事件时补充分析问题。",
+                )
+            )
+        if missing_source_lines:
+            issues.append(
+                _issue(
+                    "tracking-missing-source",
+                    "warning",
+                    f"第 {', '.join(map(str, missing_source_lines[:8]))} 行没有映射到 PRD、原型页面或页面状态。",
+                    "补充来源页面/状态；来源中不存在的模块不要新增事件。",
+                )
+            )
+
+        multi_enum_lines = []
+        for row in parameter_rows:
+            headers, cells = row["headers"], row["cells"]
+            value_type = _plain_cell(_cell(cells, _column(headers, "类型"))).lower()
+            enum_value = _plain_cell(_cell(cells, _column(headers, "枚举值", "枚举值 / 开放值")))
+            if "enum" in value_type and re.search(r"\S\s*(?:/|、|,|，)\s*\S", enum_value):
+                multi_enum_lines.append(row["line"])
+        if multi_enum_lines:
+            issues.append(
+                _issue(
+                    "tracking-multi-enum-cell",
+                    "warning",
+                    f"第 {', '.join(map(str, multi_enum_lines[:8]))} 行把多个固定枚举值写在同一个单元格。",
+                    "固定枚举一值一行，分别说明各自上报时机。",
+                )
+            )
         if not _has_any(text, ("参数名", "参数", "properties")):
             issues.append(_issue("tracking-params", "warning", "未明显找到事件参数定义。", "补充参数名、类型和枚举值。"))
         if not _has_any(text, ("失败", "取消", "超时", "重试")):
             issues.append(_issue("tracking-terminal-states", "warning", "未明显找到失败、取消、超时或重试事件。", "根据实际异步流程补齐最终状态。"))
-        sensitive = ("Cookie", "Token", "原始用户内容", "精确位置", "蓝牙广播")
-        found_sensitive = [word for word in sensitive if word.lower() in text.lower()]
+        sensitive = ("Cookie", "Token", "原始用户内容", "精确位置", "设备地址", "蓝牙广播")
+        sensitive_lines = []
+        for row in parameter_rows:
+            line = " | ".join(row["cells"])
+            if not _is_prohibition_line(line) and _has_any(line, sensitive):
+                sensitive_lines.append(row["line"])
+        found_sensitive = sorted({
+            word
+            for row in parameter_rows
+            for word in sensitive
+            if word.lower() in " | ".join(row["cells"]).lower()
+            and not _is_prohibition_line(" | ".join(row["cells"]))
+        })
         if found_sensitive:
-            issues.append(_issue("tracking-sensitive", "warning", f"正文出现敏感数据字段或提示：{', '.join(found_sensitive)}。", "确认这是禁止记录的说明，而不是埋点参数。"))
+            issues.append(_issue("tracking-sensitive", "warning", f"第 {', '.join(map(str, sensitive_lines[:8]))} 行把敏感数据写进参数表：{', '.join(found_sensitive)}。", "删除敏感参数；禁止记录的规则说明可以保留在正文。"))
 
     elif task_id == "fast/acceptance":
         checks = [
@@ -143,6 +387,46 @@ def validate(
                 issues.append(_issue(f"f3-{code}", "warning", f"未明显找到{label}。", f"补充{label}，方便开发后验收。"))
         if not _has_any(text, ("截图", "日志", "证据")):
             issues.append(_issue("f3-evidence", "warning", "未明显找到截图、日志或证据索引。", "把实际测试证据链接或文件名写入对应验收项。"))
+
+        pass_claim_lines = []
+        passed_rows_without_evidence = []
+        for table in _markdown_tables(text):
+            headers = table["headers"]
+            if _column(headers, "QA ID") is None or _column(headers, "状态") is None:
+                continue
+            status_index = _column(headers, "状态")
+            evidence_index = _column(headers, "日志/截图/录像/报告", "证据")
+            for row in table["rows"]:
+                status = _plain_cell(_cell(row["cells"], status_index)).upper()
+                if status in {"PASS", "PASSED", "通过", "已通过"}:
+                    pass_claim_lines.append(row["line"])
+                    if _is_blank_cell(_cell(row["cells"], evidence_index)):
+                        passed_rows_without_evidence.append(row["line"])
+        for line_number, line in enumerate(text.splitlines(), 1):
+            plain = _plain_cell(line)
+            if re.search(r"核心流程\s*[：:]\s*(?:PASS|通过|已通过)(?:\s|$|；|。)", plain, re.IGNORECASE):
+                pass_claim_lines.append(line_number)
+            if re.search(r"可以进入内部测试\s*[：:]\s*是(?:\s|$|；|。)", plain):
+                pass_claim_lines.append(line_number)
+        pass_claim_lines = sorted(set(pass_claim_lines))
+        if pass_claim_lines and not _has_actual_test_evidence(sources):
+            issues.append(
+                _issue(
+                    "f3-pass-without-evidence",
+                    "error",
+                    f"第 {', '.join(map(str, pass_claim_lines[:8]))} 行宣称通过，但本任务没有实际测试证据附件。",
+                    "没有构建、设备测试、日志、截图、录像或测试报告时，实测结果保持“尚未测试”，状态保持 NOT_RUN。",
+                )
+            )
+        if passed_rows_without_evidence:
+            issues.append(
+                _issue(
+                    "f3-pass-row-without-evidence",
+                    "error",
+                    f"第 {', '.join(map(str, passed_rows_without_evidence[:8]))} 行标记通过，但该 QA 行没有关联日志、截图、录像或报告。",
+                    "在对应 QA 行填写实际证据文件名或 [Sx]，再标记 PASS。",
+                )
+            )
         if workflow_mode == "fast" and re.search(r"最终结果\s*[：:]\s*`?Conditional", text, re.IGNORECASE):
             issues.append(_issue("f3-conditional", "error", "快速模式 F3 的最终结果仍为 Conditional。", "在同一份清单中补充修改和复测，直到结果变为通过。"))
 

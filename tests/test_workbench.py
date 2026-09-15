@@ -22,6 +22,26 @@ def bench(tmp_path):
     return app.Workbench(tmp_path,runner=lambda job:'# 测试交付物\n\n[待验证] 这是自动化测试生成的正文，不是真实产品结论。\n\n## 下一步\n补充资料。')
 
 
+def test_workbench_composes_domain_services(bench):
+    expected = {
+        'project_service': 'ProjectService',
+        'capability_service': 'CapabilityService',
+        'material_service': 'MaterialService',
+        'export_service': 'ExportService',
+        'retrieval_service': 'RetrievalService',
+        'job_service': 'JobService',
+        'storage_service': 'StorageService',
+        'validation_service': 'ValidationService',
+        'lanhu_adapter': 'LanhuAdapter',
+        'review_scraper': 'ReviewScraperAdapter',
+        'codex_runner': 'CodexRunner',
+    }
+
+    assert {name: getattr(bench, name).__class__.__name__ for name in expected} == expected
+    project = bench.create_project('服务组合测试', '验证兼容入口仍委托给项目服务')
+    assert bench.project_service.project(project['id'])['name'] == '服务组合测试'
+
+
 def test_project_isolation_and_persistence(bench):
     a = bench.create_project('项目一','本地阅读器')
     b = bench.create_project('项目二','另一个项目')
@@ -314,6 +334,42 @@ def test_fast_f1_separates_project_evidence_from_historical_knowledge(bench):
     assert '资料边界（必须遵守）' in job['prompt']
 
 
+def test_fast_downstream_prompts_state_their_evidence_boundaries(bench):
+    project = bench.create_project('下游事实边界', '用户已决定直接做一个轻量工具。')
+
+    f2 = bench.prepare(project['id'], 'fast/core-prd', '只实现用户明确要求的核心路径')
+    assert 'F2 需求边界（必须遵守）' in f2['prompt']
+    assert '没有已确认 F1' in f2['prompt']
+    assert '本轮拟定' in f2['prompt']
+    assert '待研发确认' in f2['prompt']
+
+    f3 = bench.prepare(project['id'], 'fast/acceptance', '')
+    assert 'F3 验收边界（必须遵守）' in f3['prompt']
+    assert '没有可识别的构建、日志、截图、录像或测试报告' in f3['prompt']
+    assert '状态统一写“NOT_RUN”' in f3['prompt']
+
+    tracking = bench.prepare(project['id'], 'fast/tracking-spec', '')
+    assert '按 tracking-spec-from-prototype 规则执行' in tracking['prompt']
+    assert '没有已确认 F2' in tracking['prompt']
+    assert '没有可识别的原型/截图类输入' in tracking['prompt']
+    assert '事件总表和参数表不填伪造行' in tracking['prompt']
+    assert '优先沿用其 Sheet 名、列顺序、字段名' in tracking['prompt']
+
+
+def test_f2_prompt_recognizes_explicitly_pinned_confirmed_f1(bench):
+    project = bench.create_project('有上游的项目', '')
+    f1 = bench.prepare(project['id'], 'fast/new-product-analysis', '')
+    bench.complete(
+        f1['id'],
+        '# F1 新品需求分析\n\n行业与市场、目标用户、用户场景、竞品差异、产品定位、MVP 首版范围、功能框架、核心流程和商业化方向均由用户确认。',
+        'imported',
+    )
+    bench.review(f1['id'], 'accepted', '范围已确认')
+
+    f2 = bench.prepare(project['id'], 'fast/core-prd', '', [f1['id']])
+    assert '已有已确认 F1，可将其作为本轮范围基线' in f2['prompt']
+
+
 def test_f1_quality_flags_ungrounded_metrics():
     from workbench.validators import summarize, validate
 
@@ -340,6 +396,88 @@ def test_f1_quality_flags_ungrounded_generalization():
         )
     )
     assert any(issue['code'] == 'f1-ungrounded-generalization' for issue in result['issues'])
+
+
+def test_f2_quality_requires_permission_recovery_path():
+    from workbench.validators import validate
+
+    missing = validate(
+        'fast/core-prd',
+        '# F2 核心 PRD\n\n扫描页需要相机权限后开始扫描。\n\n页面、入口、Loading、Empty、Error、失败、英文 UI copy、验收标准。',
+    )
+    assert any(issue['code'] == 'f2-permission-recovery' for issue in missing)
+
+    closed = validate(
+        'fast/core-prd',
+        '# F2 核心 PRD\n\n扫描页需要相机权限。用户拒绝后显示说明，可进入系统设置页重新授权，返回后重试。\n\n页面、入口、Loading、Empty、Error、失败、英文 UI copy、验收标准。',
+    )
+    assert not any(issue['code'] == 'f2-permission-recovery' for issue in closed)
+
+
+def test_f3_quality_blocks_pass_without_real_evidence():
+    from workbench.validators import summarize, validate
+
+    output = '''# F3 开发验收清单
+
+构建版本：1.0；测试设备：Pixel；包含预期结果、实际结果、复测和证据索引。
+
+| QA ID | 页面/场景 | 操作 | 预期结果 | 实测结果 | 状态 | 日志/截图/录像/报告 | 修改与复测 |
+|---|---|---|---|---|---|---|---|
+| QA-001 | 首页 | 点击开始 | 展示结果 | 符合预期 | PASS |  |  |
+'''
+    result = summarize(validate('fast/acceptance', output, 'fast', []))
+    assert any(issue['code'] == 'f3-pass-without-evidence' for issue in result['issues'])
+    assert any(issue['code'] == 'f3-pass-row-without-evidence' for issue in result['issues'])
+    assert result['ok'] is False
+
+
+def test_f3_quality_accepts_pass_with_uploaded_and_linked_evidence():
+    from workbench.validators import validate
+
+    output = '''# F3 开发验收清单
+
+构建版本：1.0；测试设备：Pixel；包含预期结果、实际结果、复测和证据索引。
+
+| QA ID | 页面/场景 | 操作 | 预期结果 | 实测结果 | 状态 | 日志/截图/录像/报告 | 修改与复测 |
+|---|---|---|---|---|---|---|---|
+| QA-001 | 首页 | 点击开始 | 展示结果 | 符合预期 | PASS | 测试报告 [S1] | 无需修改 |
+'''
+    issues = validate(
+        'fast/acceptance',
+        output,
+        'fast',
+        [{'kind': 'upload', 'name': '核心流程测试报告.txt', 'text': '实测记录', 'citation': 'S1'}],
+    )
+    assert not any(issue['code'].startswith('f3-pass-') for issue in issues)
+
+
+def test_tracking_quality_checks_table_semantics_without_flagging_prohibition_text():
+    from workbench.validators import validate
+
+    output = '''# 完整埋点方案
+
+不得记录 Cookie、Token、原始用户内容、精确位置、设备地址或蓝牙广播标识。
+
+| 事件 ID | 中文名称 | 事件类型 | 触发时机 | 分析问题 | 来源页面 / 状态 |
+|---|---|---|---|---|---|
+| `scan_start` | 扫描完成 | click | 用户点击并成功完成扫描后 |  |  |
+| `scan_start` | 再次扫描 | click | 用户点击重试后 | 是否尝试恢复 | 错误页 |
+
+| 事件 ID | 参数名 | 参数中文名 | 类型 | 枚举值 / 开放值 | 何时上报 | 是否必填 | 隐私与实现说明 |
+|---|---|---|---|---|---|---|---|
+| `scan_result` | `result` | 结果 | enum | `success / fail` | 最终回调 | 是 | 不含敏感数据 |
+
+失败、取消、超时和重试按真实回调记录。
+'''
+    issues = validate('fast/tracking-spec', output)
+    codes = {issue['code'] for issue in issues}
+    assert 'tracking-duplicate-id' in codes
+    assert 'tracking-click-as-success' in codes
+    assert 'tracking-event-suffix' in codes
+    assert 'tracking-missing-question' in codes
+    assert 'tracking-missing-source' in codes
+    assert 'tracking-multi-enum-cell' in codes
+    assert 'tracking-sensitive' not in codes
 
 
 def test_lanhu_snapshot_is_imported_as_project_evidence(bench):
@@ -708,7 +846,12 @@ def test_http_real_upload_prepare_review_download(bench):
         with urllib.request.urlopen(req) as result:
             return result.read()
     try:
-        assert b'app.js' in request('/')
+        index = request('/')
+        assert b'app.js' in index
+        assert b'/modules/state.js' in index
+        assert b'let state' in request('/modules/state.js')
+        assert b'document.addEventListener("click"' in request('/modules/events.js')
+        assert b'Composition entry' in request('/app.js')
         with pytest.raises(urllib.error.HTTPError) as denied:
             request('/api/projects',{'name':'bad'},token=False)
         assert denied.value.code==403

@@ -1,16 +1,20 @@
 # 工作台模块化重构修改清单
 
-版本：V0.1 方案稿  
-状态：待确认，尚未实施  
+版本：V0.2 实施记录
+
+状态：迭代 3–4 已完成兼容式拆分；插件契约与显式依赖注入后置
+
 范围：保持现有产品行为不变，拆分 `workbench/app.py` 与 `workbench/static/app.js`，为后续知识库和能力热插拔准备边界。
+
+当前结果：`app.py` 已由约 2797 行降至 339 行，`api/handler.py` 为 62 行；`static/app.js` 已由约 1086 行降至 56 行。后端业务进入领域服务和适配器，前端进入 `modules/`、`render/` 与 `features/`。兼容入口、HTTP API、SQLite 表和用户工作流未改变。行为基线见 `docs/WORKBENCH-BEHAVIOR-BASELINE.md`。
 
 ## 1. 重构目标
 
-- [ ] `app.py` 只负责启动、依赖组装和兼容入口，不再承载所有业务。
-- [ ] `app.js` 只负责前端启动和页面编排，不再承载所有状态、渲染和功能细节。
-- [ ] 现有 API、SQLite 数据结构、页面路径和任务行为保持兼容。
+- [x] `app.py` 只负责启动、依赖组装和兼容入口，不再承载所有业务。
+- [x] `app.js` 只负责前端启动和页面编排，不再承载所有状态、渲染和功能细节。
+- [x] 现有 API、SQLite 数据结构、页面路径和任务行为保持兼容。
 - [ ] 新增知识库、任务能力、工具、校验器或导出器时，不需要继续堆积到主文件。
-- [ ] 每一步可以单独测试、回滚和上线，不进行一次性大重写。
+- [x] 每一步可以单独测试、回滚和上线，不进行一次性大重写。
 
 ## 2. 当前耦合范围
 
@@ -41,22 +45,22 @@
 
 ### R0 行为基线与迁移映射
 
-- [ ] 记录当前启动命令、HTTP 路径、请求参数和响应结构。
-- [ ] 记录项目、资料、任务、交付物、版本、批注、评审、回收站和导出等关键行为。
-- [ ] 建立“旧方法 → 新模块 → 原测试”的迁移表。
-- [ ] 为当前没有测试的关键异常补最小回归测试：文件不存在、项目不存在、任务取消、导入失败、导出失败、引用失效。
-- [ ] 保存当前测试、语法检查和浏览器冒烟结果，作为拆分后的比较基线。
-- [ ] 先不改变字段名、状态名、URL、数据库表和交付物格式。
+- [x] 记录当前启动命令、HTTP 路径、请求参数和响应结构。
+- [x] 记录项目、资料、任务、交付物、版本、批注、评审、回收站和导出等关键行为。
+- [x] 建立“旧方法 → 新模块 → 原测试”的迁移表。
+- [x] 为当前没有测试的关键异常补最小回归测试：文件不存在、项目不存在、任务取消、导入失败、导出失败、引用失效。
+- [x] 保存当前测试、语法检查和浏览器冒烟结果，作为拆分后的比较基线。
+- [x] 先不改变字段名、状态名、URL、数据库表和交付物格式。
 
 验收：在没有新增模块前，当前测试和启动方式可重复通过。
 
 ### R1 抽取纯函数和常量
 
-- [ ] 新增 `workbench/core/constants.py`，集中状态、任务类型、平台和文件类型常量。
-- [ ] 新增 `workbench/core/text_utils.py`，迁移文本清洗、切块、引用 ID 和交付物规范化。
-- [ ] 新增 `workbench/core/file_security.py`，迁移扩展名、大小、路径、ZIP 成员和安全文件名检查。
+- [x] 新增 `workbench/core/constants.py`，集中状态、任务类型、平台和文件类型常量。
+- [x] 新增 `workbench/core/text_utils.py`，迁移文本清洗、切块、引用 ID 和交付物规范化。
+- [x] 新增 `workbench/core/file_security.py`，迁移扩展名、大小、路径、ZIP 成员和安全文件名检查。
 - [ ] 新增 `workbench/core/errors.py`，定义项目不存在、任务状态错误、来源失效、导入失败等统一异常。
-- [ ] `app.py` 暂时继续导出旧函数名，保持现有内部调用兼容。
+- [x] `app.py` 暂时继续导出旧函数名，保持现有内部调用兼容。
 
 验收：纯函数测试通过，业务输出与拆分前逐字一致。
 
@@ -64,50 +68,50 @@
 
 ### R2 项目服务
 
-- [ ] 新增 `workbench/services/project_service.py`。
-- [ ] 迁移项目创建、编辑、查询、删除确认、回收、恢复和永久删除。
-- [ ] 保持删除二次确认、运行中项目保护和向量清理规则。
-- [ ] `Workbench` 保留兼容方法，内部转发到 `ProjectService`。
+- [x] 新增 `workbench/services/project_service.py`。
+- [x] 迁移项目创建、编辑、查询、删除确认、回收、恢复和永久删除。
+- [x] 保持删除二次确认、运行中项目保护和向量清理规则。
+- [x] `Workbench` 保留兼容方法，内部转发到 `ProjectService`。
 
 ### R3 资料与图片服务
 
-- [ ] 新增 `workbench/services/material_service.py`。
-- [ ] 迁移 Markdown、TXT、CSV、JSON、PDF、DOCX 和图片导入。
-- [ ] 迁移图片资源读取、项目隔离、正文引用和来源归一化。
-- [ ] 保持 12 MB 限制、真实文件类型检查和项目路径隔离。
+- [x] 新增 `workbench/services/material_service.py`。
+- [x] 迁移 Markdown、TXT、CSV、JSON、PDF、DOCX 和图片导入。
+- [x] 迁移图片资源读取、项目隔离、正文引用和来源归一化。
+- [x] 保持 12 MB 限制、真实文件类型检查和项目路径隔离。
 - [ ] 后续知识源连接器只能通过资料服务写入项目资料，不得直接操作数据库。
 
 ### R4 任务与交付物服务
 
-- [ ] 新增 `workbench/services/job_service.py`。
-- [ ] 迁移任务准备、Codex 执行、取消、失败、重启恢复和归档。
-- [ ] 迁移 Markdown 编辑、版本链、版本恢复、定位批注、修订和评审确认。
-- [ ] 保持来源引用闭合、未处理批注阻断和 F3 Conditional 规则。
-- [ ] 将 Codex 子进程改为注入的 `CodexRunner`，服务层不直接拼命令。
+- [x] 新增 `workbench/services/job_service.py`。
+- [x] 迁移任务准备、Codex 执行、取消、失败、重启恢复和归档。
+- [x] 迁移 Markdown 编辑、版本链、版本恢复、定位批注、修订和评审确认。
+- [x] 保持来源引用闭合、未处理批注阻断和 F3 Conditional 规则。
+- [x] 将 Codex 子进程改为注入的 `CodexRunner`，服务层不直接拼命令。
 
 ### R5 检索服务
 
-- [ ] 新增 `workbench/services/retrieval_service.py`，对外只暴露项目搜索和检索状态。
-- [ ] 保留 `workbench/retrieval.py` 作为底层索引实现，先不改 Hybrid 算法。
-- [ ] 项目资料、已确认交付物和全局知识的优先级保持不变。
-- [ ] 保留 Hybrid 失败回退关键词检索。
+- [x] 新增 `workbench/services/retrieval_service.py`，对外只暴露项目搜索和检索状态。
+- [x] 保留 `workbench/retrieval.py` 作为底层索引实现，先不改 Hybrid 算法。
+- [x] 项目资料、已确认交付物和全局知识的优先级保持不变。
+- [x] 保留 Hybrid 失败回退关键词检索。
 - [ ] 为未来 `KnowledgeConnector` 留出接口，不在服务中直接绑定单一 Product KB 实现。
 
 ### R6 外部工具适配器
 
-- [ ] 新增 `workbench/adapters/codex_runner.py`。
-- [ ] 新增 `workbench/adapters/lanhu_adapter.py`。
-- [ ] 整理 `workbench/adapters/review_scraper.py`，将子进程、CSV 解析和采集状态分开。
-- [ ] 外部工具失败、超时、取消和空结果统一转换为工作台错误，不污染项目数据。
-- [ ] 凭证和本机配置继续留在工作台外部，不进入服务对象和任务包。
+- [x] 新增 `workbench/adapters/codex_runner.py`。
+- [x] 新增 `workbench/adapters/lanhu_adapter.py`。
+- [x] 整理 `workbench/adapters/review_scraper.py`，集中隔离子进程、CSV 解析和采集状态。
+- [x] 外部工具失败、超时、取消和空结果统一转换为工作台错误，不污染项目数据。
+- [x] 凭证和本机配置继续留在工作台外部，不进入服务对象和任务包。
 
 ### R7 导出、导入与校验服务
 
-- [ ] 新增 `workbench/services/export_service.py`，封装 `exporters.py`。
-- [ ] 新增 `workbench/services/validation_service.py`，封装 `validators.py`。
+- [x] 新增 `workbench/services/export_service.py`，封装 `exporters.py`。
+- [x] 新增 `workbench/services/validation_service.py`，封装 `validators.py`。
 - [ ] 导出器、校验器通过接口注入，不由项目服务直接 import 具体实现。
-- [ ] 保持 Word、PDF、Excel、CSV 和项目 ZIP 的现有输出格式。
-- [ ] 导出或校验失败不能改变交付物、评审或版本状态。
+- [x] 保持 Word、PDF、Excel、CSV 和项目 ZIP 的现有输出格式。
+- [x] 导出或校验失败不能改变交付物、评审或版本状态。
 
 验收：R2–R7 每完成一个模块，原有 `Workbench` 方法仍可调用，全部既有测试通过。
 
@@ -115,12 +119,12 @@
 
 ### R8 路由与响应拆分
 
-- [ ] 新增 `workbench/api/routes.py`，只负责 URL、HTTP 方法和参数映射。
-- [ ] 新增 `workbench/api/serializers.py`，统一 JSON、下载文件和错误响应。
-- [ ] 新增 `workbench/api/handler.py`，保留静态文件服务和请求生命周期。
-- [ ] `app.py` 只负责初始化 `Workbench`、注册路由和启动 Server。
-- [ ] 所有现有 API 路径保持兼容，不趁拆分修改前端协议。
-- [ ] 对每个 POST 接口保留错误码、中文错误信息和幂等/重复提交行为。
+- [x] 新增 `workbench/api/routes.py`，只负责 URL、HTTP 方法和参数映射。
+- [x] 新增 `workbench/api/serializers.py`，统一 JSON、下载文件和响应编码。
+- [x] 新增 `workbench/api/handler.py`，保留请求生命周期；静态文件映射与安全路径校验放在 `api/routes.py`。
+- [x] `app.py` 只负责初始化 `Workbench`、注册路由、兼容转发和启动 Server。
+- [x] 所有现有 API 路径保持兼容，不趁拆分修改前端协议。
+- [x] 对每个 POST 接口保留错误码、中文错误信息和幂等/重复提交行为。
 
 目标：`app.py` 降到约 200–400 行；超过目标时先检查是否有领域逻辑泄漏回启动文件。
 
@@ -128,30 +132,30 @@
 
 ### R9 基础模块
 
-- [ ] 新增 `static/modules/api.js`，集中 `fetch`、JSON、下载和错误处理。
-- [ ] 新增 `static/modules/state.js`，集中项目、资料、任务、交付物和界面状态。
-- [ ] 新增 `static/modules/constants.js`，集中状态、平台、任务和评论动作名称。
-- [ ] 新增 `static/modules/utils.js`，集中 HTML 转义、日期、Badge 和通用格式化。
-- [ ] 新增 `static/modules/modal.js`，集中弹窗、关闭和 Toast。
+- [x] 新增 `static/modules/api.js`，集中 `fetch`、JSON、下载和错误处理。
+- [x] 新增 `static/modules/state.js`，集中项目、资料、任务、交付物和界面状态。
+- [x] 新增 `static/modules/constants.js`，集中状态、平台、任务和评论动作名称。
+- [x] 新增 `static/modules/utils.js`，集中 HTML 转义、日期、Badge 和通用格式化。
+- [x] 新增 `static/modules/modal.js`，集中弹窗、关闭和 Toast。
 
 ### R10 Markdown 与渲染模块
 
-- [ ] 新增 `static/modules/markdown.js`，保留正文块 ID、图片引用和批注定位行为。
-- [ ] 新增 `static/render/overview.js`、`context.js`、`materials.js`、`tasks.js`、`outputs.js`、`capabilities.js`。
+- [x] 新增 `static/modules/markdown.js`，保留正文块 ID、图片引用和批注定位行为。
+- [x] 新增 `static/render/workspace.js`，按 `drawOverview`、`drawContext`、`drawMaterials`、`drawTasks`、`drawOutputs` 等函数集中工作区渲染；当前 159 行，暂不为追求文件数量继续细拆。
 - [ ] 渲染函数只接收数据，不直接发请求或修改全局状态。
-- [ ] 保持当前中文 UI、平台下拉选项、查找依据说明和错误提示。
+- [x] 保持当前中文 UI、平台下拉选项、查找依据说明和错误提示。
 
 ### R11 功能模块
 
-- [ ] 新增 `static/features/projects.js`：新建、导入、删除、恢复和永久删除。
-- [ ] 新增 `static/features/materials.js`：上传、图片、搜索和资料勾选。
-- [ ] 新增 `static/features/tasks.js`：任务准备、执行、取消和恢复。
-- [ ] 新增 `static/features/outputs.js`：编辑、批注、版本、修订、评审和导出。
-- [ ] 新增 `static/features/integrations.js`：蓝湖和竞品评论采集。
-- [ ] 新增 `static/modules/events.js`：统一事件委托，避免每个渲染函数重复绑定监听。
-- [ ] `static/app.js` 作为入口，只负责创建 API、Store、挂载渲染器和初始化事件。
+- [x] 新增 `static/features/projects.js`：新建、导入、删除、恢复和永久删除。
+- [x] 新增 `static/features/materials.js`：上传、图片、搜索和资料勾选。
+- [x] 新增 `static/features/tasks.js`：准备任务；执行、取消和恢复由统一事件层调用任务 API。
+- [x] 新增 `static/features/outputs.js`：编辑、批注、版本、修订、评审和导出。
+- [x] 新增 `static/features/integrations.js`：蓝湖和竞品评论采集。
+- [x] 新增 `static/modules/events.js`：统一事件委托，避免每个渲染函数重复绑定监听。
+- [x] `static/app.js` 作为入口，只负责导航、轮询和初始状态加载。
 
-目标：`app.js` 降到约 150–250 行；模块之间通过显式参数传递 `api`、`store` 和回调，不依赖隐式全局变量。
+目标：`app.js` 已降到 56 行。为保持无构建工具的现有加载方式，本轮仍以有序 classic scripts 共享兼容状态；改为显式传递 `api`、`store` 和回调属于后续强化，不冒险与本轮文件拆分同时进行。
 
 ## 7. 第五阶段：为热插拔建立接口
 
@@ -223,12 +227,12 @@
 ## 8. 测试、发布和回滚
 
 - [ ] 每个阶段单独提交，提交说明标记为“结构重构，不改行为”。
-- [ ] 每次提交运行 Python 语法检查、`node --check`、pytest 和 `git diff --check`。
-- [ ] 每次前端拆分后实际打开 `http://127.0.0.1:8765/` 验证首页、项目、任务和交付物。
-- [ ] 每次后端拆分后验证启动、上传、检索、生成、编辑、批注、评审和导出。
-- [ ] 保留 `Workbench` 兼容层至少一个版本周期，不立即删除旧入口。
+- [x] 当前工作树已运行 Python 语法检查、全部拆分脚本 `node --check` 和 pytest；提交前仍需再运行 `git diff --check`。
+- [x] 前端拆分后已实际打开 `http://127.0.0.1:8765/`，验证首页、任务、交付物弹窗和浏览器控制台。
+- [x] 后端拆分后已通过真实 HTTP 链路测试验证上传、准备、导入结果、编辑、版本、批注、评审和删除。
+- [x] 保留 `Workbench` 兼容层至少一个版本周期，不立即删除旧入口。
 - [ ] 新模块异常时可以通过配置开关回退到旧实现。
-- [ ] 确认新模块稳定后，再删除重复旧代码和兼容分支。
+- [x] 已移除主文件中的重复实现；兼容转发入口继续保留。
 
 ## 9. 暂时不做
 
@@ -242,12 +246,12 @@
 
 ## 10. 完成定义
 
-- [ ] 现有所有测试和浏览器核心路径通过。
-- [ ] `app.py` 只保留启动、组装和兼容入口。
-- [ ] `app.js` 只保留前端初始化和模块挂载。
-- [ ] 项目、资料、任务、检索、外部工具、导出和校验均有独立边界。
+- [x] 现有所有测试和浏览器核心路径通过。
+- [x] `app.py` 只保留启动、组装和兼容入口。
+- [x] `app.js` 只保留前端初始化和模块挂载。
+- [x] 项目、资料、任务、检索、外部工具、导出和校验均有独立边界。
 - [ ] 至少一个知识库连接器和一个任务能力包通过统一注册机制加载。
 - [ ] 连接器停用后，任务不再使用该来源；历史任务仍保留来源快照。
-- [ ] 故障、取消、导入失败和回滚不会破坏已有项目数据。
+- [x] 故障、取消、导入失败和代码回滚不会破坏已有项目数据。
 
-本清单只描述模块化重构，不代表上述项目已经实施。
+迭代 3–4 已实施并通过兼容回归；未勾选项属于后续接口强化或迭代 5 的插件化范围，不应包装成“已经完成”。

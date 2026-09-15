@@ -1,9 +1,21 @@
 {
   "id": "fast",
-  "name": "快速迭代路径",
-  "description": "面向小型出海 App 团队：把资料直接转成新品分析、核心 PRD 和开发验收，不走机会门、访谈、风险清单或技术 Spike。",
+  "name": "日常产品工作流",
+  "description": "按新品开发、版本迭代、竞品分析和版本复盘组织小型出海 App 团队的日常工作。",
   "enabled": true,
   "tasks": [
+    {
+      "id": "product-baseline",
+      "name": "产品基线",
+      "description": "整理当前线上产品的定位、功能、主要流程、商业化配置和已知问题，后续版本只写增量变化。",
+      "template": "knowledge/templates/product-baseline.md",
+      "output": "产品基线",
+      "tools": ["project-search", "document-parser", "codex"],
+      "query": "当前产品基线 线上版本 功能框架 启动流程 商业化配置 已知问题 最近版本结论",
+      "knowledge_ids": [],
+      "max_chars": 8000,
+      "modes": ["fast"]
+    },
     {
       "id": "new-product-analysis",
       "name": "F1 新品需求分析",
@@ -12,19 +24,45 @@
       "output": "F1 新品需求分析",
       "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
       "query": "Heart Rate 新品需求分析 行业 用户 竞品差异 产品定位 产品范围 功能框架 核心流程 商业化",
+      "knowledge_ids": ["method-new-product-analysis", "template-f1-new-product-analysis", "case-heart-rate-template-evolution"],
       "max_chars": 16000,
+      "modes": ["fast"]
+    },
+    {
+      "id": "version-brief",
+      "name": "版本简报",
+      "description": "用一页说明本版本目标、当前行为、本次变化、保持不变的范围和后续交付。",
+      "template": "knowledge/templates/version-brief.md",
+      "output": "版本简报",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "版本需求 当前行为 增量变化 影响模块 研发设计交接 C端 PRD",
+      "knowledge_ids": ["external-opos-03-templates-prd-template-c-end-overseas"],
+      "max_chars": 6000,
       "modes": ["fast"]
     },
     {
       "id": "core-prd",
       "name": "F2 核心 PRD",
-      "description": "基于新品分析写本轮真正要开发的页面、规则、状态、异常恢复和验收标准。",
+      "description": "基于新品分析或版本简报，写本轮真正要开发的页面、规则、状态、异常恢复和验收标准。",
       "template": "knowledge/templates/f2-core-prd.md",
       "output": "F2 核心 PRD",
       "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
       "query": "核心 PRD 页面 交互 业务规则 异常恢复 验收 竞品截图",
+      "knowledge_ids": ["template-f2-core-prd", "pattern-prd-state-closure", "external-opos-03-templates-prd-template-c-end-overseas"],
       "max_chars": 8000,
-      "recommended_upstream": "fast/new-product-analysis",
+      "recommended_upstream_any": ["fast/new-product-analysis", "fast/version-brief"],
+      "modes": ["fast"]
+    },
+    {
+      "id": "competitor-analysis",
+      "name": "竞品分析",
+      "description": "围绕一个当前产品问题分析竞品流程、功能、商业化和评论，输出可进入当前版本的结论。",
+      "template": "knowledge/templates/competitor-analysis-note.md",
+      "output": "竞品分析",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "C端出海 App 竞品分析 当前产品问题 核心流程 功能 商业化 评论 横向差异",
+      "knowledge_ids": ["external-opos-03-templates-competitor-analysis-template-c-end-overseas", "external-opos-04-sops-user-feedback-processing-sop"],
+      "max_chars": 10000,
       "modes": ["fast"]
     },
     {
@@ -35,6 +73,7 @@
       "output": "完整埋点方案",
       "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
       "query": "tracking-spec-from-prototype 埋点 页面展示 点击 选择 结果 权限 失败 重试 漏斗 参数 隐私",
+      "knowledge_ids": ["template-f4-tracking-spec"],
       "max_chars": 20000,
       "recommended_upstream": "fast/core-prd",
       "modes": ["fast"]
@@ -47,9 +86,22 @@
       "output": "F3 开发验收清单",
       "tools": ["project-search", "document-parser", "codex"],
       "query": "开发验收 QA 埋点 技术日志 截图 录像 测试报告 复测",
+      "knowledge_ids": [],
       "max_chars": 5000,
       "recommended_upstream": "fast/core-prd",
       "review_policy": "acceptance",
+      "modes": ["fast"]
+    },
+    {
+      "id": "version-result",
+      "name": "版本复盘",
+      "description": "汇总版本目标、实际变化、数据和反馈，给出保留、继续迭代、回退或暂无法判断的结论。",
+      "template": "knowledge/templates/version-result.md",
+      "output": "版本复盘",
+      "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
+      "query": "版本上线复盘 目标 实际变化 数据 用户反馈 下一版本 决策",
+      "knowledge_ids": ["external-opos-04-sops-user-feedback-processing-sop", "external-opos-03-templates-prd-template-c-end-overseas"],
+      "max_chars": 6000,
       "modes": ["fast"]
     }
   ]
