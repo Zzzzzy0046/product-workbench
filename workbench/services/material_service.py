@@ -20,7 +20,7 @@ class MaterialService(BoundService):
 
     def document(self, document_id):
         rows = self.rows(
-            "SELECT id,project_id,name,text,kind,created FROM documents WHERE id=?",
+            "SELECT id,project_id,name,text,kind,category,subcategory,created FROM documents WHERE id=?",
             (str(document_id).strip(),),
         )
         if not rows:
@@ -181,7 +181,7 @@ class MaterialService(BoundService):
                 invalid.append(document_id)
         return invalid
 
-    def add_document(self, project_id, name, content, version_id="", relation="evidence"):
+    def add_document(self, project_id, name, content, version_id="", relation="evidence", category="", subcategory=""):
         self.project(project_id)
         product_version = self.version_service.resolve(project_id, version_id)
         if not isinstance(name, str) or not name or len(name) > 180 or any(c in name for c in '/\\\x00'):
@@ -201,14 +201,63 @@ class MaterialService(BoundService):
         except Exception as exc:
             raise ValueError("文档解析失败，请检查文件格式或另存为 TXT。") from exc
         document_id = uid()
+        category = str(category or infer_material_category(name, "upload")).strip().lower()
+        if category not in MATERIAL_CATEGORIES:
+            raise ValueError("资料分类无效。")
+        subcategory = str(subcategory or infer_image_subcategory(name, category)).strip().lower()
+        if category == "images" and subcategory not in IMAGE_SUBCATEGORIES:
+            raise ValueError("图片分类无效。")
+        if category != "images":
+            subcategory = ""
         directory = self.data / "uploads" / project_id
         directory.mkdir(parents=True, exist_ok=True)
         (directory / (document_id + Path(name).suffix.lower())).write_bytes(content)
         with self.db() as db:
-            db.execute("INSERT INTO documents VALUES(?,?,?,?,?,?,?)", (document_id,project_id,name,text,digest,now(),"upload"))
+            db.execute(
+                "INSERT INTO documents(id,project_id,name,text,sha,created,kind,category,subcategory) VALUES(?,?,?,?,?,?,?,?,?)",
+                (document_id,project_id,name,text,digest,now(),"upload",category,subcategory),
+            )
         if product_version:
             self.version_service.link_document(project_id, document_id, product_version["id"], relation)
         return {"id":document_id,"name":name,"characters":len(text),"duplicate":False}
+
+    def set_document_category(self, project_id, document_id, category):
+        self.project(project_id)
+        category = str(category or "").strip().lower()
+        if category not in MATERIAL_CATEGORIES:
+            raise ValueError("资料分类无效。")
+        document_id = str(document_id or "").strip()
+        with self.db() as db:
+            row = db.execute(
+                "SELECT id FROM documents WHERE id=? AND project_id=?",
+                (document_id, project_id),
+            ).fetchone()
+            if not row:
+                raise ValueError("资料不存在。")
+            current = db.execute("SELECT name,subcategory FROM documents WHERE id=?", (document_id,)).fetchone()
+            subcategory = current["subcategory"] if category == "images" else ""
+            if category == "images" and subcategory not in IMAGE_SUBCATEGORIES:
+                subcategory = infer_image_subcategory(current["name"], category)
+            db.execute("UPDATE documents SET category=?,subcategory=? WHERE id=?", (category, subcategory, document_id))
+        return {"id": document_id, "category": category}
+
+    def set_document_subcategory(self, project_id, document_id, subcategory):
+        self.project(project_id)
+        subcategory = str(subcategory or "").strip().lower()
+        if subcategory not in IMAGE_SUBCATEGORIES:
+            raise ValueError("图片分类无效。")
+        document_id = str(document_id or "").strip()
+        with self.db() as db:
+            row = db.execute(
+                "SELECT id,category FROM documents WHERE id=? AND project_id=?",
+                (document_id, project_id),
+            ).fetchone()
+            if not row:
+                raise ValueError("资料不存在。")
+            if row["category"] != "images":
+                raise ValueError("只有截图与图片资料可以设置图片分类。")
+            db.execute("UPDATE documents SET subcategory=? WHERE id=?", (subcategory, document_id))
+        return {"id": document_id, "subcategory": subcategory}
 
     def add_lanhu_snapshot(self, project_id, url, pages, version_id=""):
         """Persist a sanitized, read-only Lanhu MCP snapshot as project evidence."""

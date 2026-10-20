@@ -420,8 +420,8 @@ class ExportService(BoundService):
                 for item in collections["documents"]:
                     new_id = document_map.get(str(item.get("id")), uid())
                     db.execute(
-                        "INSERT INTO documents(id,project_id,name,text,sha,created,kind) VALUES(?,?,?,?,?,?,?)",
-                        (new_id, new_project_id, item.get("name", "资料"), self._remap_asset_refs(item.get("text", ""), document_map), item.get("sha", ""), item.get("created", now()), item.get("kind", "upload")),
+                        "INSERT INTO documents(id,project_id,name,text,sha,created,kind,category,subcategory) VALUES(?,?,?,?,?,?,?,?,?)",
+                        (new_id, new_project_id, item.get("name", "资料"), self._remap_asset_refs(item.get("text", ""), document_map), item.get("sha", ""), item.get("created", now()), item.get("kind", "upload"), item.get("category") or infer_material_category(item.get("name", "资料"), item.get("kind", "upload")), item.get("subcategory") or infer_image_subcategory(item.get("name", "资料"), item.get("category") or infer_material_category(item.get("name", "资料"), item.get("kind", "upload")))),
                     )
                 for item in collections["jobs"]:
                     old_id = str(item.get("id", ""))

@@ -28,7 +28,7 @@ Get-ChildItem workbench\static -Recurse -Filter *.js | ForEach-Object { node --c
 - 页面入口、中文 UI、项目数据目录和启动命令保持兼容。
 - HTTP URL、请求字段、响应字段、状态名和中文错误语义保持兼容。
 - SQLite 原表继续原位使用，不迁移用户现有数据。
-- F1、F2、完整埋点、F3 的模板、前后置关系、来源快照和确认规则保持不变。
+- F1 在界面中以 5 个顺序章节任务展开，各自保留来源快照、编辑、批注、版本和评审；完整 F1 只合并已确认章节。F2、完整埋点和 F3 的现有行为保持不变。
 - 生成、取消、恢复、编辑、版本、定位批注、精确修订、评审和归档行为保持不变。
 - Markdown、Word、PDF、Excel、CSV 以及完整项目 ZIP 的格式与入口保持不变。
 - `Workbench` 的原公开方法至少保留一个版本周期，并转发给领域服务。
@@ -111,7 +111,7 @@ Get-ChildItem workbench\static -Recurse -Filter *.js | ForEach-Object { node --c
 每次前端结构调整至少检查：
 
 1. 首页能够加载现有项目，切换项目正常；
-2. 「项目背景」「资料与检索」「任务」「交付物」均能打开；
+2. 「项目背景」「资料」「任务」「交付物」均能打开；
 3. F1、F2、完整埋点和 F3 卡片正常显示；
 4. 交付物弹窗能渲染 Markdown、质量结果、批注和下载入口；
 5. 浏览器控制台没有 JavaScript error；

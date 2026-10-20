@@ -174,6 +174,52 @@ def _optional_date(value):
         raise ValueError(f"日期格式无效：{value}，请使用 YYYY-MM-DD。") from exc
 
 
+def _filter_reviews(rows: list[dict], payload: dict) -> tuple[list[dict], dict]:
+    ratings = {int(value) for value in (payload.get("ratings") or []) if str(value).isdigit() and 1 <= int(value) <= 5}
+    include_keywords = [str(value).strip().casefold() for value in (payload.get("include_keywords") or []) if str(value).strip()]
+    exclude_keywords = [str(value).strip().casefold() for value in (payload.get("exclude_keywords") or []) if str(value).strip()]
+    reply_filter = str(payload.get("reply_filter") or "any").strip().lower()
+    version_filter = str(payload.get("version_filter") or "").strip().casefold()
+    try:
+        min_thumbs_up = max(0, int(payload.get("min_thumbs_up") or 0))
+    except (TypeError, ValueError):
+        min_thumbs_up = 0
+    active = bool(ratings or include_keywords or exclude_keywords or reply_filter != "any" or version_filter or min_thumbs_up)
+    if not active:
+        return rows, {"active": False, "fetched": len(rows), "kept": len(rows)}
+    filtered = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if ratings:
+            try:
+                score = int(round(float(row.get("score"))))
+            except (TypeError, ValueError):
+                continue
+            if score not in ratings:
+                continue
+        searchable = "\n".join(str(row.get(key) or "") for key in ("title", "content", "original_content")).casefold()
+        if include_keywords and not any(term in searchable for term in include_keywords):
+            continue
+        if exclude_keywords and any(term in searchable for term in exclude_keywords):
+            continue
+        has_reply = bool(str(row.get("reply_content") or "").strip())
+        if reply_filter == "replied" and not has_reply:
+            continue
+        if reply_filter == "unreplied" and has_reply:
+            continue
+        if version_filter and version_filter not in str(row.get("version") or "").casefold():
+            continue
+        try:
+            thumbs_up = int(row.get("thumbs_up_count") or 0)
+        except (TypeError, ValueError):
+            thumbs_up = 0
+        if thumbs_up < min_thumbs_up:
+            continue
+        filtered.append(row)
+    return filtered, {"active": True, "fetched": len(rows), "kept": len(filtered)}
+
+
 def _json_value(value):
     if isinstance(value, (date,)):
         return value.isoformat()
@@ -365,6 +411,7 @@ def main() -> int:
                 rows.append(review.model_dump(mode="json"))
             else:
                 rows.append(dict(review))
+        rows, filter_stats = _filter_reviews(rows, payload)
         if payload.get("translate") and rows:
             translation = _translate_items(
                 [
@@ -385,7 +432,7 @@ def main() -> int:
             if translation["failed_count"]:
                 warnings.append(f"{translation['failed_count']} 条评论翻译失败，原文已保留")
             warnings.extend(translation.get("warnings") or [])
-        _emit({"listing": listing, "reviews": rows, "warnings": warnings})
+        _emit({"listing": listing, "reviews": rows, "warnings": warnings, "filter_stats": filter_stats})
         return 0
     except Exception as exc:  # noqa: BLE001 - serialized for the caller
         _emit({"error": str(exc)[:1000]})

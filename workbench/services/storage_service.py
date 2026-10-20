@@ -10,7 +10,7 @@ class StorageService(BoundService):
             db.executescript("""
                 CREATE TABLE IF NOT EXISTS projects(id TEXT PRIMARY KEY,name TEXT,brief TEXT,created TEXT);
                 CREATE TABLE IF NOT EXISTS product_versions(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,name TEXT NOT NULL,version_type TEXT NOT NULL,status TEXT NOT NULL,goal TEXT NOT NULL DEFAULT '',target_date TEXT NOT NULL DEFAULT '',created TEXT NOT NULL,updated TEXT NOT NULL,UNIQUE(project_id,name));
-                CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,project_id TEXT,name TEXT,text TEXT,sha TEXT,created TEXT,kind TEXT);
+                CREATE TABLE IF NOT EXISTS documents(id TEXT PRIMARY KEY,project_id TEXT,name TEXT,text TEXT,sha TEXT,created TEXT,kind TEXT,category TEXT NOT NULL DEFAULT '',subcategory TEXT NOT NULL DEFAULT '');
                 CREATE TABLE IF NOT EXISTS version_documents(version_id TEXT NOT NULL,document_id TEXT NOT NULL,relation TEXT NOT NULL DEFAULT 'evidence',created TEXT NOT NULL,PRIMARY KEY(version_id,document_id));
                 CREATE TABLE IF NOT EXISTS jobs(id TEXT PRIMARY KEY,project_id TEXT,task_id TEXT,title TEXT,status TEXT,created TEXT,updated TEXT,prompt TEXT,sources TEXT,output TEXT,error TEXT);
                 CREATE TABLE IF NOT EXISTS preferences(key TEXT PRIMARY KEY,value TEXT);
@@ -41,6 +41,27 @@ class StorageService(BoundService):
             condition_columns = {row[1] for row in db.execute("PRAGMA table_info(conditions)")}
             if "review_date" not in condition_columns:
                 db.execute("ALTER TABLE conditions ADD COLUMN review_date TEXT NOT NULL DEFAULT ''")
+            document_columns = {row[1] for row in db.execute("PRAGMA table_info(documents)")}
+            if "category" not in document_columns:
+                db.execute("ALTER TABLE documents ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+            if "subcategory" not in document_columns:
+                db.execute("ALTER TABLE documents ADD COLUMN subcategory TEXT NOT NULL DEFAULT ''")
+            uncategorized_documents = db.execute(
+                "SELECT id,name,kind FROM documents WHERE category='' OR category IS NULL"
+            ).fetchall()
+            for document in uncategorized_documents:
+                db.execute(
+                    "UPDATE documents SET category=? WHERE id=?",
+                    (infer_material_category(document["name"], document["kind"]), document["id"]),
+                )
+            image_documents = db.execute(
+                "SELECT id,name,category FROM documents WHERE category='images' AND (subcategory='' OR subcategory IS NULL)"
+            ).fetchall()
+            for document in image_documents:
+                db.execute(
+                    "UPDATE documents SET subcategory=? WHERE id=?",
+                    (infer_image_subcategory(document["name"], document["category"]), document["id"]),
+                )
             scrape_columns = {row[1] for row in db.execute("PRAGMA table_info(scrapes)")}
             if "review_count" not in scrape_columns:
                 db.execute("ALTER TABLE scrapes ADD COLUMN review_count INTEGER NOT NULL DEFAULT 0")

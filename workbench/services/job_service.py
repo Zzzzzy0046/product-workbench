@@ -5,9 +5,47 @@ from workbench.services.base import BoundService
 
 
 class JobService(BoundService):
+    def _latest_scoped_job(self, project_id, task_id, version_id=""):
+        rows = self.rows(
+            """SELECT j.*,r.decision AS review_decision,r.created AS review_created
+               FROM jobs j LEFT JOIN reviews r ON r.job_id=j.id
+               WHERE j.project_id=? AND j.task_id=? AND COALESCE(j.version_id,'')=?
+               AND j.archived=0
+               AND NOT EXISTS(SELECT 1 FROM jobs child WHERE child.parent_job_id=j.id)
+               ORDER BY j.updated DESC,j.rowid DESC LIMIT 1""",
+            (project_id, task_id, str(version_id or "")),
+        )
+        return rows[0] if rows else None
+
+    def _required_upstream_jobs(self, project_id, task, version_id=""):
+        required = list(dict.fromkeys(task.get("required_upstream_all") or []))
+        if not required:
+            return []
+        accepted, missing = [], []
+        for task_id in required:
+            job = self._latest_scoped_job(project_id, str(task_id), version_id)
+            if not job or job.get("review_decision") != "accepted":
+                missing.append(str(task_id))
+            else:
+                accepted.append(job)
+        if missing:
+            names = []
+            for task_id in missing:
+                try:
+                    names.append(self.task_definition(task_id)["name"])
+                except ValueError:
+                    names.append(task_id)
+            raise ValueError("请先生成并确认前置章节：" + "、".join(names) + "。")
+        return accepted
+
     def prepare(self, project_id, key, instruction, document_ids=None, version_id=""):
         project, task = self.project(project_id), self.task(key)
         product_version = self.version_service.resolve(project_id, version_id)
+        required_upstream_jobs = self._required_upstream_jobs(
+            project_id,
+            task,
+            product_version["id"] if product_version else "",
+        )
         is_fast = project["workflow_mode"] == "fast"
         instruction = str(instruction).strip()
         if len(instruction) > 12000:
@@ -23,6 +61,24 @@ class JobService(BoundService):
                 raise ValueError("真实构建验收必须显式指定至少一份实际测试证据，例如测试记录、日志、截图索引或设备结果。")
         search_limit = 24 if is_fast else 12
         sources = self.search(project_id, project["name"] + " " + project["brief"][:1200] + " " + task["query"] + " " + instruction[:1200], search_limit)
+        if required_upstream_jobs:
+            upstream_sources = [
+                {
+                    "source_id": job["id"],
+                    "name": job["title"] + "（已确认）.md",
+                    "kind": "accepted",
+                    "location": job["title"],
+                    "chunk": 1,
+                    "text": job["output"],
+                    "score": None,
+                    "truncated": False,
+                }
+                for job in required_upstream_jobs
+            ]
+            sources = upstream_sources + [
+                source for source in sources
+                if source.get("source_id") not in {job["id"] for job in required_upstream_jobs}
+            ]
         if is_fast:
             sources = [
                 source
@@ -30,12 +86,15 @@ class JobService(BoundService):
                 if source["kind"] != "knowledge"
                 or source["source_id"] not in FAST_EXCLUDED_KNOWLEDGE_IDS
             ]
-            if key == "fast/new-product-analysis":
+            if key in FAST_F1_TASKS:
+                required_upstream_ids = {job["id"] for job in required_upstream_jobs}
                 sources = [
                     source
                     for source in sources
                     if (
                         source["kind"] == "upload"
+                        or source["kind"] == "accepted"
+                        and source.get("source_id") in required_upstream_ids
                         or source["kind"] == "knowledge"
                         and source["source_id"] in FAST_F1_METHOD_KNOWLEDGE_IDS
                     )
@@ -164,7 +223,7 @@ class JobService(BoundService):
         output_limit = int(task.get("max_chars", 20000 if is_fast else 60000))
         evidence_rule = "快速模式直接写结论，不使用[事实]、[推断]、[假设]、[风险]、[待验证]等标签。所有显式指定的项目资料都作为证据附件保留，并在正文资料索引中登记、在相关结论中引用；不要把整份原始数据复制进正文。" if is_fast else "结论必须能追溯到来源；没有来源的内容要明确说明，不得编造。"
         grounding_rule = ""
-        if key == "fast/new-product-analysis":
+        if key in FAST_F1_TASKS:
             grounding_rule = """资料边界（必须遵守）：
 - <项目证据资料> 和用户在项目背景中明确写出的内容，才可以支持当前产品、市场、用户、竞品和商业化的具体事实；每个外部事实尽量紧跟 [Sx] 引用。
 - <方法与模板参考> 只用于理解 F1 结构和写法，不能拿其中其他产品的功能、价格、下载量、收入、DAU、用户画像或商业化决定套到当前产品，也不要把方法资料编号写成当前产品证据。
@@ -173,6 +232,9 @@ class JobService(BoundService):
 - 除非本次要求明确写出“实时检索/搜索/查最新资料”，否则不要主动调用 web search 或补充外部网页事实；用户没有提供的竞品不要自行挑选并当作已确认对标对象。
 - 资料没有覆盖的章节，直接写“当前资料未覆盖，暂不下结论”，不要用行业常识填满。
 - 产品方案可以提出建议，但必须使用“建议/本产品可/待确认”等方案措辞，不能写成已经验证的用户需求、市场事实或竞品事实；不为满足字数扩写。"""
+            chapter_scope = str(task.get("chapter_scope", "")).strip()
+            if chapter_scope:
+                grounding_rule += "\n- 本章边界：" + chapter_scope
         elif key == "fast/core-prd":
             grounding_rule = f"""F2 需求边界（必须遵守）：
 - 当前项目事实只来自 <项目背景数据>、<项目证据资料> 和用户本次明确要求；<方法与模板参考> 只提供写法，不能补入其他产品的页面、规则、价格、权限或商业化决定。
@@ -205,6 +267,8 @@ class JobService(BoundService):
             "fast/version-result": "版本复盘只使用项目中提供的上线内容、数据与反馈；没有观察数据时写“暂无法判断”，不得虚构指标变化或把主观判断写成上线结果。",
         }
         artifact_rule = artifact_rules.get(key, "")
+        if key in FAST_F1_SECTION_TASKS:
+            artifact_rule = "只输出当前章节模板要求的内容，不复述其他章节；F1 不输出平台、权限、数据或政策独立章节。"
         if key == "fast/tracking-spec":
             artifact_rule = "事件 ID、参数名、枚举值使用英文，解释、触发条件、分析问题和交付物正文使用中文；仅在来源确实包含相关异步流程时覆盖失败、取消、超时和重试。不得记录 Cookie、Token、原始用户内容、精确位置、设备地址或可识别蓝牙广播标识。"
         prompt = f"""你正在执行一个已由用户启动的产品交付任务。最终只输出完整中文 Markdown 交付物。
@@ -262,6 +326,152 @@ class JobService(BoundService):
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "任务包.md").write_text(prompt, encoding="utf-8")
         (directory / "执行记录.json").write_text(json.dumps({"task":task,"context":context,"project":project,"product_version":product_version,"sources":sources,"model":configured_model(),"created":now()},ensure_ascii=False,indent=2),encoding="utf-8")
+        return self.job(job_id)
+
+    @staticmethod
+    def _assembled_section_body(output):
+        lines = str(output or "").strip().splitlines()
+        if lines and lines[0].strip() == "---":
+            try:
+                end = next(index for index in range(1, len(lines)) if lines[index].strip() == "---")
+                lines = lines[end + 1:]
+            except StopIteration:
+                pass
+        for index, line in enumerate(lines):
+            if not line.strip():
+                continue
+            if line.startswith("# "):
+                lines.pop(index)
+            break
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _table_text(value):
+        return str(value or "").replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
+
+    def assemble_sections(self, project_id, key="fast/new-product-analysis", version_id=""):
+        project, task = self.project(project_id), self.task(key)
+        if task.get("assembly") != "accepted_sections":
+            raise ValueError("当前任务不支持分章合并。")
+        product_version = self.version_service.resolve(project_id, version_id)
+        scope_version_id = product_version["id"] if product_version else ""
+        section_keys = list(task.get("section_tasks") or [])
+        if not section_keys:
+            raise ValueError("F1 尚未配置可合并章节。")
+        section_jobs, missing = [], []
+        for section_key in section_keys:
+            job = self._latest_scoped_job(project_id, section_key, scope_version_id)
+            if not job or job.get("review_decision") != "accepted":
+                missing.append(self.task_definition(section_key)["name"])
+            else:
+                section_jobs.append(job)
+        if missing:
+            raise ValueError("以下章节尚未确认，暂不能合并完整 F1：" + "、".join(missing) + "。")
+
+        chapter_sources = [
+            {
+                "source_id": job["id"],
+                "name": job["title"] + "（已确认）.md",
+                "kind": "accepted",
+                "location": job["title"],
+                "chunk": 1,
+                "text": job["output"],
+                "score": None,
+                "truncated": False,
+            }
+            for job in section_jobs
+        ]
+        sources, _ = self.normalize_sources(project_id, chapter_sources)
+        source_by_id = {str(source.get("source_id", "")): source for source in sources}
+        kind_labels = {
+            "accepted": "已确认章节",
+            "deliverable": "章节草稿",
+            "upload": "证据附件",
+        }
+        evidence_rows = []
+        for source in sources:
+            if source.get("kind") == "knowledge":
+                continue
+            evidence_rows.append(
+                "| [{citation}] | {name} | {kind} | {location} |".format(
+                    citation=self._table_text(source.get("citation")),
+                    name=self._table_text(source.get("name")),
+                    kind=self._table_text(kind_labels.get(source.get("kind"), source.get("kind", "资料"))),
+                    location=self._table_text(source.get("location") or source.get("name")),
+                )
+            )
+        section_bodies = []
+        for job in section_jobs:
+            mapped = source_by_id.get(job["id"], {}).get("text", job["output"])
+            section_bodies.append(self._assembled_section_body(mapped))
+        assembled_at = date.today().isoformat()
+        platform_label = {
+            "Android-first": "Android",
+            "iOS-first": "iOS",
+            "双端": "双平台",
+        }.get(project.get("platform"), project.get("platform") or "未指定")
+        output = f"""# F1 新品需求分析
+
+> 本文由 5 个已确认章节自动合并。系统只统一来源编号和章节顺序，没有调用模型重写已确认正文。
+
+## 0. 文档信息
+
+| 字段 | 内容 |
+|---|---|
+| 产品名称 | {self._table_text(project['name'])} |
+| 产品方向 | {self._table_text(project['brief'])} |
+| 目标平台 | {self._table_text(platform_label)} |
+| 产品版本 | {self._table_text(product_version['name'] if product_version else '产品级工作')} |
+| 合并日期 | {assembled_at} |
+| 章节状态 | 5 个章节均已确认 |
+
+## 1. 资料索引
+
+原始附件继续保存在项目资料中；本表记录本次合并实际使用的章节与证据快照。
+
+| 编号 | 资料 | 类型 | 来源位置 |
+|---|---|---|---|
+{chr(10).join(evidence_rows) if evidence_rows else '| — | 当前没有项目证据附件 | — | — |'}
+
+{chr(10).join(body for body in section_bodies if body)}
+"""
+        output = normalize_deliverable(output)
+        if len(output) > MAX_TEXT:
+            raise ValueError("合并后的 F1 超过系统长度限制，请先压缩章节正文。")
+
+        job_id, stamp = uid(), now()
+        prompt = "系统任务：按固定顺序合并 5 个已确认 F1 章节；统一来源编号，不调用模型，不改写章节正文。"
+        with self.lock:
+            with self.db() as db:
+                db.execute(
+                    """INSERT INTO jobs(id,project_id,task_id,title,status,created,updated,prompt,sources,output,error,workflow_mode,parent_job_id,revision_number,revision_reason,source_version,archived,version_id)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (
+                        job_id, project_id, key, task["output"], "prepared", stamp, stamp,
+                        prompt, json.dumps(sources, ensure_ascii=False), "", "", project["workflow_mode"],
+                        "", 1, "", 0, 0, scope_version_id,
+                    ),
+                )
+            directory = self.data / "runs" / job_id
+            directory.mkdir(parents=True, exist_ok=True)
+            (directory / "任务包.md").write_text(prompt, encoding="utf-8")
+            (directory / "执行记录.json").write_text(
+                json.dumps(
+                    {
+                        "task": task,
+                        "project": project,
+                        "product_version": product_version,
+                        "sources": sources,
+                        "assembled": True,
+                        "section_jobs": [job["id"] for job in section_jobs],
+                        "created": stamp,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            self.complete(job_id, output, "assembled")
         return self.job(job_id)
 
     def job(self, job_id):
@@ -428,7 +638,7 @@ class JobService(BoundService):
         output = normalize_deliverable(output)
         if len(output) > MAX_TEXT:
             raise ValueError("交付物超过长度限制。")
-        if source not in {"generated","imported"}:
+        if source not in {"generated","imported","assembled"}:
             raise ValueError("交付物来源无效。")
         job = self.job(job_id)
         invalid_citations = self.citation_issues(output,job["sources"])
@@ -443,7 +653,10 @@ class JobService(BoundService):
         stamp = now()
         with self.db() as db:
             db.execute("UPDATE jobs SET status='completed',output=?,updated=?,error='' WHERE id=?", (output,stamp,job_id))
-            db.execute("INSERT INTO documents VALUES(?,?,?,?,?,?,?)", (job_id,job["project_id"],job["title"]+"（待评审草稿）.md",output,hashlib.sha256(output.encode()).hexdigest(),stamp,"deliverable"))
+            db.execute(
+                "INSERT INTO documents(id,project_id,name,text,sha,created,kind,category) VALUES(?,?,?,?,?,?,?,?)",
+                (job_id,job["project_id"],job["title"]+"（待评审草稿）.md",output,hashlib.sha256(output.encode()).hexdigest(),stamp,"deliverable","deliverable"),
+            )
             if job.get("version_id"):
                 db.execute(
                     """INSERT INTO version_documents(version_id,document_id,relation,created)
@@ -454,7 +667,11 @@ class JobService(BoundService):
             if not db.execute("SELECT 1 FROM job_versions WHERE job_id=?", (job_id,)).fetchone():
                 db.execute(
                     "INSERT INTO job_versions(id,job_id,version,output,source,note,created) VALUES(?,?,?,?,?,?,?)",
-                    (uid(),job_id,1,output,source,"首次生成" if source=="generated" else "首次导入",stamp),
+                    (
+                        uid(), job_id, 1, output, source,
+                        "分章自动合并" if source == "assembled" else "首次生成" if source == "generated" else "首次导入",
+                        stamp,
+                    ),
                 )
             if job.get("parent_job_id") and job.get("revision_reason") == "comments":
                 try:

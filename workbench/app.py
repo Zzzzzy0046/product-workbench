@@ -156,6 +156,12 @@ class Workbench:
     def document_file(self, *args, **kwargs):
         return self.material_service.document_file(*args, **kwargs)
 
+    def set_document_category(self, *args, **kwargs):
+        return self.material_service.set_document_category(*args, **kwargs)
+
+    def set_document_subcategory(self, *args, **kwargs):
+        return self.material_service.set_document_subcategory(*args, **kwargs)
+
     def translate_review_document(self, *args, **kwargs):
         return self.review_scraper.translate_review_document(*args, **kwargs)
 
@@ -270,6 +276,9 @@ class Workbench:
     def prepare_for_version(self, project_id, key, instruction, document_ids=None, version_id=""):
         return self.job_service.prepare(project_id, key, instruction, document_ids, version_id)
 
+    def assemble_sections(self, *args, **kwargs):
+        return self.job_service.assemble_sections(*args, **kwargs)
+
     def job(self, *args, **kwargs):
         return self.job_service.job(*args, **kwargs)
 
@@ -352,7 +361,7 @@ class Workbench:
             result["versions"] = self.product_versions(project_id)
             result["context"] = self.context(project_id)
             result["conditions"] = self.conditions(project_id)
-            result["documents"] = self.rows("SELECT id,name,kind,created,length(text) AS characters FROM documents WHERE project_id=? ORDER BY created DESC", (project_id,))
+            result["documents"] = self.rows("SELECT id,name,kind,category,subcategory,created,length(text) AS characters FROM documents WHERE project_id=? ORDER BY created DESC", (project_id,))
             links = self.rows(
                 """SELECT d.document_id,d.version_id,v.name AS version_name,d.relation
                    FROM version_documents d JOIN product_versions v ON v.id=d.version_id
@@ -369,7 +378,7 @@ class Workbench:
             result["scrapes"] = self.scrapes(project_id)
             result["jobs"] = self.rows("""SELECT j.id,j.title,j.task_id,j.status,j.created,j.updated,j.error,j.workflow_mode,j.parent_job_id,j.revision_number,j.revision_reason,j.source_version,j.archived,j.version_id,v.name AS version_name,
                 CASE WHEN EXISTS(SELECT 1 FROM jobs child WHERE child.parent_job_id=j.id) THEN 0 ELSE 1 END AS is_latest,
-                r.decision AS review_decision
+                r.decision AS review_decision,r.created AS review_created
                 FROM jobs j LEFT JOIN reviews r ON j.id=r.job_id LEFT JOIN product_versions v ON v.id=j.version_id
                 WHERE j.project_id=? ORDER BY j.created DESC, j.rowid DESC""", (project_id,))
             result["mode_mismatch_count"] = sum(1 for item in result["jobs"] if item["workflow_mode"] != result["project"]["workflow_mode"])

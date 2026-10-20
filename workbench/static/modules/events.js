@@ -15,6 +15,12 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.tab) {
       tab = b.dataset.tab;
       draw();
+    } else if (b.dataset.removePendingMaterial) {
+      removePendingMaterial(b.dataset.removePendingMaterial);
+    } else if (b.hasAttribute("data-clear-pending-materials")) {
+      clearPendingMaterials();
+    } else if (b.hasAttribute("data-upload-pending-materials")) {
+      await uploadPendingMaterials(b);
     } else if (b.dataset.action === "new") newProject();
     else if (b.dataset.action === "delete-project") confirmDeleteProject();
     else if (b.dataset.trashRestore) {
@@ -75,7 +81,8 @@ document.addEventListener("click", async (e) => {
       });
       await refresh();
       toast("能力设置已保存，项目任务已更新");
-    } else if (b.dataset.task) prepareTask(b.dataset.task);
+    } else if (b.dataset.f1Assemble) await assembleF1(b.dataset.f1Assemble, b);
+    else if (b.dataset.task) prepareTask(b.dataset.task);
     else if (b.dataset.condition) {
       const item = (state.conditions || []).find((c) => c.id === b.dataset.condition);
       if (item) conditionForm(item);

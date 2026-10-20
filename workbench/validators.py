@@ -190,6 +190,49 @@ def validate(
                 )
             )
 
+    elif task_id in {
+        "fast/f1-category-user",
+        "fast/f1-competitor-differences",
+        "fast/f1-positioning-scope",
+        "fast/f1-product-solution",
+        "fast/f1-flow-monetization",
+    }:
+        section_checks = {
+            "fast/f1-category-user": [
+                ("market", ("品类", "行业", "市场"), "品类或市场背景"),
+                ("user", ("用户分层", "目标用户", "核心用户"), "用户分层"),
+                ("scene", ("使用场景", "核心场景", "触发场景"), "核心使用场景"),
+            ],
+            "fast/f1-competitor-differences": [
+                ("competitors", ("竞品选择", "单竞品", "竞品 A"), "竞品范围"),
+                ("delta", ("横向差异", "竞品差异", "与竞品的差异"), "竞品差异"),
+                ("reviews", ("评论主题", "用户不满", "用户喜欢"), "评论或口碑结论"),
+            ],
+            "fast/f1-positioning-scope": [
+                ("positioning", ("一句话定位", "产品定位"), "产品定位"),
+                ("value", ("首次价值", "产品价值"), "首次价值"),
+                ("scope", ("V0", "现在必须做", "本阶段不做"), "V0 范围"),
+            ],
+            "fast/f1-product-solution": [
+                ("framework", ("产品树", "功能框架"), "产品功能框架"),
+                ("modules", ("核心功能", "核心模块", "模块目标"), "核心模块说明"),
+            ],
+            "fast/f1-flow-monetization": [
+                ("flow", ("主要流程", "核心任务流程", "再次使用流程"), "产品主要流程"),
+                ("monetization", ("商业化", "Subscription", "IAP", "Ads"), "商业化方案"),
+                ("handoff", ("进入 PRD", "F2 需要", "PRD 交接"), "F2 交接范围"),
+            ],
+        }
+        for code, words, label in section_checks[task_id]:
+            if not _has_any(text, words):
+                issues.append(_issue(f"f1-section-{code}", "warning", f"本章未明显找到{label}。", f"只补充当前章节需要的{label}。"))
+        for word in ("机会门", "用户访谈", "假设验证", "技术 Spike", "平台与权限"):
+            if word.lower() in text.lower():
+                issues.append(_issue("f1-section-scope", "warning", f"本章出现快速模式不需要的内容：{word}。", "删除无关段落，保留当前章节的产品判断。"))
+        project_sources = [source for source in (sources or []) if isinstance(source, dict) and source.get("kind") != "knowledge"]
+        if project_sources and not re.search(r"\[S[1-9][0-9]*\]", text):
+            issues.append(_issue("f1-section-missing-citation", "warning", "当前章节有项目资料，但正文没有看到来源编号引用。", "只在资料支持的结论旁标注 [Sx]。"))
+
     elif task_id == "fast/core-prd":
         checks = [
             ("page", ("页面", "功能"), "页面或功能定义"),

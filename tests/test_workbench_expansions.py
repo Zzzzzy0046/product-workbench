@@ -30,6 +30,46 @@ PIXEL = base64.b64decode(
 )
 
 
+def test_material_categories_are_inferred_editable_and_exported(tmp_path):
+    bench = app.Workbench(tmp_path, runner=lambda _: "unused")
+    try:
+        project = bench.create_project("资料分类", "")
+        listing = bench.add_document(project["id"], "竞品商店信息-Test-US.md", b"listing")
+        reviews = bench.add_document(project["id"], "竞品评论-Test-US.csv", b"review_id,content,score,published_at\n1,ok,5,2026-09-17")
+        image = bench.add_document(project["id"], "竞品截图-Test-US-01.png", PIXEL)
+        policy = bench.add_document(project["id"], "Google Play policy.md", b"policy")
+        categories = {
+            row["id"]: (row["category"], row["subcategory"])
+            for row in bench.rows("SELECT id,category,subcategory FROM documents WHERE project_id=?", (project["id"],))
+        }
+        assert categories[listing["id"]] == ("competitor", "")
+        assert categories[reviews["id"]] == ("reviews", "")
+        assert categories[image["id"]] == ("images", "competitor")
+        assert categories[policy["id"]] == ("policy", "")
+
+        bench.set_document_category(project["id"], listing["id"], "research")
+        assert bench.document(listing["id"])["category"] == "research"
+        bench.set_document_subcategory(project["id"], image["id"], "reference")
+        assert bench.document(image["id"])["subcategory"] == "reference"
+        with pytest.raises(ValueError, match="分类无效"):
+            bench.set_document_category(project["id"], listing["id"], "made-up")
+        with pytest.raises(ValueError, match="图片分类无效"):
+            bench.set_document_subcategory(project["id"], image["id"], "made-up")
+        with pytest.raises(ValueError, match="只有截图与图片"):
+            bench.set_document_subcategory(project["id"], listing["id"], "other")
+
+        package, _ = bench.export_project(project["id"])
+        imported = bench.import_project(package)
+        imported_categories = {
+            row["name"]: (row["category"], row["subcategory"])
+            for row in bench.rows("SELECT name,category,subcategory FROM documents WHERE project_id=?", (imported["id"],))
+        }
+        assert imported_categories["竞品商店信息-Test-US.md"] == ("research", "")
+        assert imported_categories["竞品截图-Test-US-01.png"] == ("images", "reference")
+    finally:
+        bench.close()
+
+
 def test_export_formats_and_inline_image(tmp_path):
     bench = app.Workbench(tmp_path, runner=lambda _: "unused")
     project = bench.create_project("导出项目", "快速验证")
@@ -220,6 +260,50 @@ def test_review_translation_splits_malformed_batches_and_keeps_alignment(tmp_pat
     assert result["skipped_count"] == 1
     assert result["failed_count"] == 0
     assert calls == [["First", "Second"], ["First"], ["Second"]]
+
+
+def test_review_filters_apply_before_translation_and_report_counts():
+    rows = [
+        {"content": "Too many ads and the app crashes", "score": 1, "version": "2.3.1", "thumbs_up_count": 12, "reply_content": "We are fixing it"},
+        {"content": "Too many ads", "score": 2, "version": "2.3.0", "thumbs_up_count": 3, "reply_content": ""},
+        {"content": "Works well without ads", "score": 5, "version": "2.3.1", "thumbs_up_count": 20, "reply_content": "Thanks"},
+        {"content": "Crash after update promo", "score": 1, "version": "2.2.9", "thumbs_up_count": 9, "reply_content": "Please retry"},
+    ]
+    filtered, stats = review_worker._filter_reviews(rows, {
+        "ratings": [1, 2],
+        "include_keywords": ["ads", "crash"],
+        "exclude_keywords": ["promo"],
+        "reply_filter": "replied",
+        "version_filter": "2.3",
+        "min_thumbs_up": 5,
+    })
+    assert filtered == [rows[0]]
+    assert stats == {"active": True, "fetched": 4, "kept": 1}
+
+
+def test_review_filter_request_normalizes_and_validates(tmp_path):
+    bench = app.Workbench(tmp_path, runner=lambda _: "unused")
+    try:
+        normalized = bench.review_scraper._review_filter_request({
+            "ratings": [5, "1", 5],
+            "include_keywords": "ads， crash\nslow",
+            "exclude_keywords": ["promo", "PROMO"],
+            "reply_filter": "unreplied",
+            "version_filter": " 2.3 ",
+            "min_thumbs_up": "8",
+        })
+        assert normalized == {
+            "ratings": [1, 5],
+            "include_keywords": ["ads", "crash", "slow"],
+            "exclude_keywords": ["promo"],
+            "reply_filter": "unreplied",
+            "version_filter": "2.3",
+            "min_thumbs_up": 8,
+        }
+        with pytest.raises(ValueError, match="1–5"):
+            bench.review_scraper._review_filter_request({"ratings": [0]})
+    finally:
+        bench.close()
 
 
 def test_review_scraper_worker_is_safe_with_gbk_stdio(tmp_path):

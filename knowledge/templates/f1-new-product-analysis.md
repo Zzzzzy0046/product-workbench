@@ -8,13 +8,15 @@ region: [global]
 evidence_level: approved-plan
 status: active
 source: [source-heart-rate-original-pdf, source-pdf-reader-heart-template, case-heart-rate-template-evolution, method-new-product-analysis]
-reviewed_at: 2026-09-10
+reviewed_at: 2026-09-16
 tags: [F1, 新品需求分析, Heart-Rate结构, 竞品差异, 快速迭代, 小团队]
 ---
 
 # F1 新品需求分析
 
 > 本模板恢复 Heart Rate 新品分析的完整产品故事：行业与市场、用户、竞品、定位、范围、产品框架、核心功能、主要流程和商业化。它不是一页定义卡，也不是正式立项报告。
+>
+> 工作台默认不再一次生成整篇，而是按“品类与用户 → 竞品差异 → 定位与范围 → 功能框架与核心模块 → 流程、商业化与 PRD 交接”生成 5 个章节。每章确认后才进入下一章，最后由系统按本模板顺序合并，不调用模型改写已确认正文。
 >
 > 面向已经决定要做的品类。默认不生成用户访谈、假设验证、风险清单、技术 Spike、Gate 或条件闭环。结构要完整，但没有最低字数要求；资料不足时明确写“当前资料未覆盖，暂不下结论”，不要为了填满篇幅补写数字、竞品、用户画像或商业化事实。产品方案可以提出建议，但要用“建议/本产品可/待确认”等措辞，不能冒充已验证事实。
 

@@ -2,37 +2,234 @@
 
 /* materials.js: loaded by index.html before the app bootstrap. */
 
-async function upload(e) {
-  const files = Array.from(e.target.files),
-    input = e.target;
-  input.disabled = true;
+let pendingMaterialFiles = [];
+let pastedImageSequence = 0;
+let activeMaterialCategory = "all";
+let activeImageSubcategory = "all";
+let materialSearchQuery = "";
+
+const materialCategories = [
+  { id: "competitor", label: "竞品资料" },
+  { id: "reviews", label: "评论数据" },
+  { id: "images", label: "截图与图片" },
+  { id: "policy", label: "政策与合规" },
+  { id: "technical", label: "技术与日志" },
+  { id: "research", label: "研究资料" },
+  { id: "deliverable", label: "交付物" },
+  { id: "other", label: "其他资料" },
+];
+
+const imageSubcategories = [
+  { id: "competitor", label: "竞品截图" },
+  { id: "prototype", label: "产品与原型" },
+  { id: "data", label: "数据与报表" },
+  { id: "policy", label: "政策与规则" },
+  { id: "feedback", label: "用户反馈" },
+  { id: "reference", label: "参考与素材" },
+  { id: "other", label: "其他图片" },
+];
+
+function materialCategoryLabel(category) {
+  return materialCategories.find((item) => item.id === category)?.label || "其他资料";
+}
+
+function materialCategoryOptions(document) {
+  if (["accepted", "deliverable"].includes(document.kind)) {
+    return '<span class="tag material-category-tag">交付物</span>';
+  }
+  return `<select class="material-category-control" data-document-category="${E(document.id)}" aria-label="设置 ${E(document.name)} 的分类">${materialCategories
+    .filter((item) => item.id !== "deliverable")
+    .map((item) => `<option value="${item.id}" ${item.id === document.category ? "selected" : ""}>${E(item.label)}</option>`)
+    .join("")}</select>`;
+}
+
+function materialImageSubcategoryOptions(document) {
+  return `<select class="material-category-control image-subcategory-control" data-document-subcategory="${E(document.id)}" aria-label="设置 ${E(document.name)} 的图片分类">${imageSubcategories
+    .map((item) => `<option value="${item.id}" ${item.id === document.subcategory ? "selected" : ""}>${E(item.label)}</option>`)
+    .join("")}</select>`;
+}
+
+function filterMaterialLibrary() {
+  const root = $("#material-library");
+  if (!root) return;
+  const query = materialSearchQuery.trim().toLocaleLowerCase("zh-CN");
+  let visibleCount = 0;
+  root.querySelectorAll("[data-material-item]").forEach((item) => {
+    const matchesCategory = activeMaterialCategory === "all" || item.dataset.materialCategory === activeMaterialCategory;
+    const matchesQuery = !query || String(item.dataset.materialName || "").toLocaleLowerCase("zh-CN").includes(query);
+    const matchesImageSubcategory = activeMaterialCategory !== "images" || activeImageSubcategory === "all" || item.dataset.materialSubcategory === activeImageSubcategory;
+    item.hidden = !(matchesCategory && matchesQuery && matchesImageSubcategory);
+    if (!item.hidden) visibleCount += 1;
+  });
+  root.querySelectorAll("[data-material-group]").forEach((group) => {
+    const groupVisibleCount = group.querySelectorAll("[data-material-item]:not([hidden])").length;
+    group.hidden = groupVisibleCount === 0;
+    const count = group.querySelector("[data-material-group-count]");
+    if (count) count.textContent = `${groupVisibleCount} 份资料`;
+  });
+  root.querySelectorAll("[data-material-filter]").forEach((button) => {
+    const active = button.dataset.materialFilter === activeMaterialCategory;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  root.querySelectorAll("[data-image-subcategory-filter]").forEach((button) => {
+    const active = button.dataset.imageSubcategoryFilter === activeImageSubcategory;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const status = $("#material-filter-status");
+  if (status) status.textContent = visibleCount ? `当前显示 ${visibleCount} 份` : "没有符合条件的资料";
+  const empty = $("#material-filter-empty");
+  if (empty) empty.hidden = visibleCount > 0;
+}
+
+const acceptedMaterialSuffixes = new Set(["md", "txt", "csv", "json", "pdf", "docx", "png", "jpg", "jpeg", "webp"]);
+
+function readableBytes(value) {
+  const bytes = Number(value || 0);
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function clipboardImageName(file) {
+  const stamp = new Date();
+  const datePart = [stamp.getFullYear(), String(stamp.getMonth() + 1).padStart(2, "0"), String(stamp.getDate()).padStart(2, "0")].join("");
+  const timePart = [String(stamp.getHours()).padStart(2, "0"), String(stamp.getMinutes()).padStart(2, "0"), String(stamp.getSeconds()).padStart(2, "0")].join("");
+  pastedImageSequence += 1;
+  const suffix = file.type === "image/jpeg" ? "jpg" : file.type === "image/webp" ? "webp" : "png";
+  return `截图-${datePart}-${timePart}-${String(pastedImageSequence).padStart(2, "0")}.${suffix}`;
+}
+
+function pendingMaterialId() {
+  return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function renderPendingMaterials() {
+  const container = $("#pending-materials");
+  if (!container) return;
+  if (!pendingMaterialFiles.length) {
+    container.innerHTML = '<div class="paste-empty">暂存区还没有资料。你可以连续截图并按 Ctrl+V，最后再统一上传。</div>';
+    return;
+  }
+  const totalSize = pendingMaterialFiles.reduce((sum, item) => sum + item.file.size, 0);
+  const previews = pendingMaterialFiles.map((item) => {
+    const suffix = String(item.file.name).split(".").pop().toLowerCase();
+    const preview = item.objectUrl
+      ? `<img src="${E(item.objectUrl)}" alt="${E(item.file.name)} 预览">`
+      : `<div class="pending-file-type">${E(suffix.toUpperCase())}</div>`;
+    return `<article class="pending-material">${preview}<div><strong>${E(item.file.name)}</strong><small>${E(readableBytes(item.file.size))}${item.pasted ? " · 剪贴板截图" : ""}</small></div><button class="icon-button" data-remove-pending-material="${E(item.id)}" aria-label="移除 ${E(item.file.name)}">×</button></article>`;
+  }).join("");
+  container.innerHTML = `<div class="pending-toolbar"><div><strong>待上传 ${pendingMaterialFiles.length} 份</strong><small>共 ${E(readableBytes(totalSize))}，确认后才写入项目</small></div><div class="actions"><button class="small" data-clear-pending-materials>清空</button><button class="primary" data-upload-pending-materials>一并上传</button></div></div><div class="pending-grid">${previews}</div>`;
+}
+
+function queueMaterialFiles(files, pasted = false) {
+  const incoming = Array.from(files || []);
+  if (!incoming.length) return;
+  let added = 0;
+  for (const original of incoming) {
+    if (pendingMaterialFiles.length >= 30) {
+      error(Error("一次最多暂存 30 份资料，请先上传当前批次。"));
+      break;
+    }
+    if (original.size > 12 * 1024 * 1024) {
+      error(Error((original.name || "剪贴板图片") + " 超过 12 MB"));
+      continue;
+    }
+    let file = original;
+    if (pasted && String(original.type || "").startsWith("image/")) {
+      file = new File([original], clipboardImageName(original), { type: original.type || "image/png", lastModified: Date.now() });
+    }
+    const suffix = String(file.name || "").split(".").pop().toLowerCase();
+    if (!acceptedMaterialSuffixes.has(suffix)) {
+      error(Error(`${file.name || "该文件"} 的格式不支持`));
+      continue;
+    }
+    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    if (pendingMaterialFiles.some((item) => item.key === key)) continue;
+    pendingMaterialFiles.push({
+      id: pendingMaterialId(),
+      key,
+      file,
+      pasted,
+      objectUrl: String(file.type || "").startsWith("image/") ? URL.createObjectURL(file) : "",
+    });
+    added += 1;
+  }
+  renderPendingMaterials();
+  if (added) toast(`已暂存 ${added} 份资料，可继续粘贴`);
+}
+
+function removePendingMaterial(id) {
+  const item = pendingMaterialFiles.find((entry) => entry.id === id);
+  if (item?.objectUrl) URL.revokeObjectURL(item.objectUrl);
+  pendingMaterialFiles = pendingMaterialFiles.filter((entry) => entry.id !== id);
+  renderPendingMaterials();
+}
+
+function clearPendingMaterials() {
+  pendingMaterialFiles.forEach((item) => item.objectUrl && URL.revokeObjectURL(item.objectUrl));
+  pendingMaterialFiles = [];
+  renderPendingMaterials();
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = () => reject(Error("文件读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadPendingMaterials(button) {
+  if (!pendingMaterialFiles.length) return;
+  const batch = [...pendingMaterialFiles];
+  const failed = [];
   let successful = 0;
-  for (const file of files) {
+  button.disabled = true;
+  button.textContent = `正在上传 0/${batch.length}`;
+  for (const item of batch) {
     try {
-      if (file.size > 12 * 1024 * 1024) throw Error(file.name + " 超过 12 MB");
-      const content = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(",")[1]);
-        reader.onerror = () => reject(Error("文件读取失败"));
-        reader.readAsDataURL(file);
-      });
-      const r = await api("/api/documents", {
+      const content = await readFileAsBase64(item.file);
+      await api("/api/documents", {
         project_id: projectId,
         version_id: currentVersion()?.id || "",
-        name: file.name,
+        name: item.file.name,
         content,
       });
       successful++;
-      toast(
-        r.duplicate ? file.name + " 已存在，已关联到当前范围" : file.name + " 已导入",
-      );
+      if (item.objectUrl) URL.revokeObjectURL(item.objectUrl);
     } catch (err) {
       error(err);
+      failed.push(item);
     }
+    button.textContent = `正在上传 ${successful}/${batch.length}`;
   }
+  pendingMaterialFiles = failed;
   await refresh();
-  toast(`已处理 ${successful}/${files.length} 份资料`);
+  toast(failed.length ? `已上传 ${successful} 份，${failed.length} 份失败并保留在暂存区` : `已上传 ${successful} 份资料`);
 }
+
+function upload(e) {
+  queueMaterialFiles(e.target.files);
+  e.target.value = "";
+}
+
+function handleMaterialPaste(e) {
+  if (tab !== "materials" || !projectId || document.querySelector("dialog[open]")) return;
+  const active = document.activeElement;
+  if (active && (active.matches("input, textarea") || active.isContentEditable)) return;
+  const files = Array.from(e.clipboardData?.items || [])
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  queueMaterialFiles(files, true);
+}
+
+document.addEventListener("paste", handleMaterialPaste);
 
 async function search() {
   const button = $("#search");

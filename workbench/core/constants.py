@@ -9,6 +9,25 @@ MAX_FILE = 12 * 1024 * 1024
 MAX_PACKAGE = 200 * 1024 * 1024
 MAX_TEXT = 2_000_000
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+MATERIAL_CATEGORIES = {
+    "competitor": "竞品资料",
+    "reviews": "评论数据",
+    "images": "截图与图片",
+    "policy": "政策与合规",
+    "technical": "技术与日志",
+    "research": "研究资料",
+    "deliverable": "交付物",
+    "other": "其他资料",
+}
+IMAGE_SUBCATEGORIES = {
+    "competitor": "竞品截图",
+    "prototype": "产品与原型",
+    "data": "数据与报表",
+    "policy": "政策与规则",
+    "feedback": "用户反馈",
+    "reference": "参考与素材",
+    "other": "其他图片",
+}
 REVIEW_SCRAPER_CONFIG_KEY = "integration:review-scraper"
 SCRAPE_STATUSES = {"queued", "running", "ready", "completed", "empty", "failed", "cancelled"}
 TOOLS = [
@@ -61,10 +80,72 @@ FAST_F1_METHOD_KNOWLEDGE_IDS = {
     "template-f1-new-product-analysis",
     "case-heart-rate-template-evolution",
 }
+FAST_F1_SECTION_TASKS = (
+    "fast/f1-category-user",
+    "fast/f1-competitor-differences",
+    "fast/f1-positioning-scope",
+    "fast/f1-product-solution",
+    "fast/f1-flow-monetization",
+)
+FAST_F1_TASKS = {"fast/new-product-analysis", *FAST_F1_SECTION_TASKS}
+
+
+def infer_material_category(name, kind="upload"):
+    """Choose a useful default category without asking users to pre-sort files."""
+    filename = str(name or "").strip()
+    lowered = filename.casefold()
+    suffix = Path(filename).suffix.casefold()
+    document_kind = str(kind or "upload").strip().lower()
+    if document_kind in {"accepted", "deliverable"}:
+        return "deliverable"
+    if filename.startswith("竞品评论-") or "review" in lowered or "评论" in filename:
+        return "reviews"
+    if suffix in IMAGE_SUFFIXES:
+        return "images"
+    if filename.startswith("竞品商店信息-") or "竞品" in filename or "competitor" in lowered:
+        return "competitor"
+    if any(term in lowered for term in ("policy", "privacy", "terms", "compliance")) or any(term in filename for term in ("政策", "合规", "隐私", "条款", "规则")):
+        return "policy"
+    if any(term in lowered for term in ("log", "crash", "api", "technical")) or any(term in filename for term in ("日志", "崩溃", "技术", "接口")):
+        return "technical"
+    if any(term in lowered for term in ("research", "report", "market")) or any(term in filename for term in ("研究", "调研", "报告", "市场")):
+        return "research"
+    return "other"
+
+
+def infer_image_subcategory(name, category="images"):
+    """Infer a second-level image bucket while keeping screenshots in one main library category."""
+    if str(category or "").strip().lower() != "images":
+        return ""
+    filename = str(name or "").strip()
+    lowered = filename.casefold()
+    if filename.startswith("竞品截图-") or "竞品" in filename or "competitor" in lowered:
+        return "competitor"
+    if any(term in lowered for term in ("prototype", "figma", "axure", "wireframe", "mockup")) or any(term in filename for term in ("原型", "蓝湖", "页面", "界面")):
+        return "prototype"
+    if any(term in lowered for term in ("dashboard", "analytics", "chart", "ga4", "firebase", "umeng")) or any(term in filename for term in ("数据", "报表", "图表", "漏斗", "友盟")):
+        return "data"
+    if any(term in lowered for term in ("policy", "compliance", "play console", "app store connect")) or any(term in filename for term in ("政策", "规则", "审核", "拒审", "合规")):
+        return "policy"
+    if any(term in lowered for term in ("feedback", "review", "comment", "support")) or any(term in filename for term in ("用户反馈", "评论", "客服")):
+        return "feedback"
+    if any(term in lowered for term in ("reference", "inspiration", "asset")) or any(term in filename for term in ("参考", "灵感", "素材")):
+        return "reference"
+    return "other"
 # Automatically retrieved confirmed deliverables may only flow to their direct
 # downstream task. Users can still pin another current-project document
 # explicitly when they intentionally want to override this default boundary.
 FAST_ACCEPTED_UPSTREAM_TASKS = {
+    "fast/f1-competitor-differences": {"fast/f1-category-user"},
+    "fast/f1-positioning-scope": {
+        "fast/f1-category-user",
+        "fast/f1-competitor-differences",
+    },
+    "fast/f1-product-solution": {"fast/f1-positioning-scope"},
+    "fast/f1-flow-monetization": {
+        "fast/f1-positioning-scope",
+        "fast/f1-product-solution",
+    },
     "fast/core-prd": {"fast/new-product-analysis", "fast/version-brief"},
     "fast/tracking-spec": {"fast/core-prd"},
     "fast/acceptance": {"fast/core-prd", "fast/tracking-spec"},

@@ -95,9 +95,13 @@ def dispatch_post(self, path, payload):
             db.execute("INSERT OR REPLACE INTO contexts VALUES(?,?,?)", (payload['project_id'],foundation,working))
         return self.respond({"ok":True})
     if path == "/api/documents":
-        return self.respond(self.app.add_document(payload["project_id"],payload["name"],base64.b64decode(payload["content"],validate=True),payload.get("version_id","")),201)
+        return self.respond(self.app.add_document(payload["project_id"],payload["name"],base64.b64decode(payload["content"],validate=True),payload.get("version_id",""),"evidence",payload.get("category",""),payload.get("subcategory","")),201)
     if path.startswith("/api/documents/"):
         parts = path.strip("/").split("/")
+        if len(parts) == 4 and parts[3] == "category":
+            return self.respond(self.app.set_document_category(payload["project_id"],parts[2],payload.get("category","")))
+        if len(parts) == 4 and parts[3] == "subcategory":
+            return self.respond(self.app.set_document_subcategory(payload["project_id"],parts[2],payload.get("subcategory","")))
         if len(parts) == 4 and parts[3] == "delete":
             return self.respond(self.app.delete_image(payload["project_id"], parts[2]))
         if len(parts) == 4 and parts[3] == "translate":
@@ -108,6 +112,8 @@ def dispatch_post(self, path, payload):
         return self.respond(self.app.add_lanhu_snapshot(payload["project_id"],payload.get("url",""),payload.get("pages",[]),payload.get("version_id","")),201)
     if path == "/api/prepare":
         return self.respond(self.app.prepare(payload["project_id"],payload["task"],payload.get("instruction",""),payload.get("document_ids",[]),payload.get("version_id","")),201)
+    if path == "/api/assemble":
+        return self.respond(self.app.assemble_sections(payload["project_id"],payload.get("task","fast/new-product-analysis"),payload.get("version_id","")),201)
     if path == "/api/packs":
         if payload["id"] not in {p["id"] for p in self.app.registry()} or not isinstance(payload["enabled"],bool):
             raise ValueError("能力配置无效。")

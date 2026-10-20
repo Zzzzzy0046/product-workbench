@@ -130,6 +130,7 @@ class ReviewScraperAdapter(BoundService):
             "document_ids": manifest.get("document_ids") or [],
             "translation_requested": bool(request.get("translate")),
             "translated_count": int(manifest.get("translated_count") or 0),
+            "filter_stats": manifest.get("filter_stats") if isinstance(manifest.get("filter_stats"), dict) else {},
         })
         if include_listing:
             item["listing"] = listing
@@ -211,6 +212,7 @@ class ReviewScraperAdapter(BoundService):
         date_to = self._scrape_date(payload.get("date_to"), "结束日期")
         if date_from and date_to and date_from > date_to:
             raise ValueError("开始日期不能晚于结束日期。")
+        review_filters = self._review_filter_request(payload)
         if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1", (project_id,)):
             raise ValueError("当前项目已有竞品采集任务执行中，请等待完成。")
         stamp = now()
@@ -230,6 +232,7 @@ class ReviewScraperAdapter(BoundService):
                     "translate": bool(payload.get("translate", True)),
                     "translation_batch_size": 20,
                     "requires_confirmation": True,
+                    **review_filters,
                 }
                 db.execute(
                     "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
@@ -319,6 +322,7 @@ class ReviewScraperAdapter(BoundService):
                 if isinstance(item, dict)
             ),
             "warnings": warnings,
+            "filter_stats": result.get("filter_stats") if isinstance(result.get("filter_stats"), dict) else {},
             "created_at": now(),
         }
         (directory / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -595,6 +599,69 @@ class ReviewScraperAdapter(BoundService):
             raise ValueError(f"{label}格式无效，请使用 YYYY-MM-DD。") from exc
         return value
 
+    @staticmethod
+    def _review_filter_request(payload):
+        raw_ratings = payload.get("ratings", [])
+        if isinstance(raw_ratings, str):
+            raw_ratings = re.split(r"[,，\s]+", raw_ratings)
+        if not isinstance(raw_ratings, list):
+            raise ValueError("评分筛选格式无效。")
+        ratings = []
+        for value in raw_ratings:
+            if value in (None, ""):
+                continue
+            try:
+                rating = int(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("评分筛选只支持 1–5 星。") from exc
+            if rating not in {1, 2, 3, 4, 5}:
+                raise ValueError("评分筛选只支持 1–5 星。")
+            if rating not in ratings:
+                ratings.append(rating)
+
+        def terms(value, label):
+            if isinstance(value, str):
+                rows = re.split(r"[,，\n]+", value)
+            elif isinstance(value, list):
+                rows = value
+            elif value in (None, ""):
+                rows = []
+            else:
+                raise ValueError(f"{label}格式无效。")
+            cleaned = []
+            for item in rows:
+                term = str(item or "").strip()
+                if not term:
+                    continue
+                if len(term) > 80:
+                    raise ValueError(f"{label}中的单个关键词不能超过 80 字符。")
+                if term.casefold() not in {existing.casefold() for existing in cleaned}:
+                    cleaned.append(term)
+            if len(cleaned) > 20:
+                raise ValueError(f"{label}最多填写 20 个关键词。")
+            return cleaned
+
+        reply_filter = str(payload.get("reply_filter") or "any").strip().lower()
+        if reply_filter not in {"any", "replied", "unreplied"}:
+            raise ValueError("开发者回复筛选无效。")
+        version_filter = str(payload.get("version_filter") or "").strip()
+        if len(version_filter) > 100:
+            raise ValueError("版本筛选不能超过 100 字符。")
+        try:
+            min_thumbs_up = int(payload.get("min_thumbs_up") or 0)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("最低点赞数必须是数字。") from exc
+        if min_thumbs_up < 0 or min_thumbs_up > 1_000_000:
+            raise ValueError("最低点赞数必须在 0–1000000 之间。")
+        return {
+            "ratings": sorted(ratings),
+            "include_keywords": terms(payload.get("include_keywords"), "包含关键词"),
+            "exclude_keywords": terms(payload.get("exclude_keywords"), "排除关键词"),
+            "reply_filter": reply_filter,
+            "version_filter": version_filter,
+            "min_thumbs_up": min_thumbs_up,
+        }
+
     def start_review_scrape(self, project_id, payload):
         self.project(project_id)
         if not isinstance(payload, dict):
@@ -631,6 +698,7 @@ class ReviewScraperAdapter(BoundService):
         date_to = self._scrape_date(payload.get("date_to"), "结束日期")
         if date_from and date_to and date_from > date_to:
             raise ValueError("开始日期不能晚于结束日期。")
+        review_filters = self._review_filter_request(payload)
         active = self.rows(
             "SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1",
             (project_id,),
@@ -648,6 +716,7 @@ class ReviewScraperAdapter(BoundService):
             "version_id": product_version["id"] if product_version else "",
             "translate": bool(payload.get("translate", False)),
             "translation_batch_size": 20,
+            **review_filters,
         }
         scrape_id = uid()
         stamp = now()
