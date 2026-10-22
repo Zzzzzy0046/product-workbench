@@ -22,6 +22,32 @@ function qualitySummary(job) {
   return `<div class="quality-check ${quality.errors ? "quality-has-errors" : "quality-has-warnings"}"><strong>轻量质量校验：${quality.errors ? `${quality.errors} 个阻断项` : "无阻断项"}${quality.warnings ? ` · ${quality.warnings} 个提示` : ""}</strong><ul>${quality.issues.map((issue) => `<li class="${issue.severity === "error" ? "quality-error" : "quality-warning"}"><span class="tag ${issue.severity === "error" ? "bad" : "warn"}">${issue.severity === "error" ? "阻断" : "提示"}</span> ${E(issue.message)}${issue.hint ? `<small>建议：${E(issue.hint)}</small>` : ""}</li>`).join("")}</ul></div>`;
 }
 
+function f1ContinuationAction(job) {
+  const active = currentVersion();
+  if (job.review?.decision !== "accepted" || job.archived || job.is_latest === 0 || job.has_newer_revision || job.stale_upstream?.length ||
+      (job.version_id || "") !== (active?.id || "")) return null;
+  const parent = state.packs.flatMap((pack) => pack.tasks).find((task) => task.assembly === "accepted_sections" && task.key === "fast/new-product-analysis");
+  if (!parent) return null;
+  if (job.task_id === parent.key) {
+    return taskIsCurrentConfirmed(parent.key) ? { type: "prototype", label: "继续：原型图＋需求说明" } : null;
+  }
+  const index = parent.section_tasks.indexOf(job.task_id);
+  if (index < 0 || scopedTaskJobs(job.task_id)[0]?.id !== job.id) return null;
+  const nextKey = parent.section_tasks[index + 1];
+  if (nextKey) {
+    const next = state.packs.flatMap((pack) => pack.tasks).find((task) => task.key === nextKey);
+    if (!next || !(next.required_upstream_all || []).every((key) => scopedTaskJobs(key)[0]?.review_decision === "accepted")) return null;
+    const existing = scopedTaskJobs(nextKey)[0];
+    return existing ? { type: "job", jobId: existing.id, label: `继续查看：${next.name}` }
+      : { type: "prepare", taskKey: nextKey, label: `继续准备：${next.name}` };
+  }
+  if (!parent.section_tasks.every((key) => scopedTaskJobs(key)[0]?.review_decision === "accepted")) return null;
+  const combined = scopedTaskJobs(parent.key)[0];
+  return combined && taskIsCurrentConfirmed(parent.key)
+    ? { type: "job", jobId: combined.id, label: "查看已确认的完整 F1" }
+    : { type: "assemble", taskKey: parent.key, label: "合并五章为完整 F1（不调用模型）" };
+}
+
 function showJob(job) {
   activeJob = job.id;
   const running = ["running", "queued"].includes(job.status),
@@ -47,6 +73,41 @@ function showJob(job) {
     button.textContent = "按意见准备修订版";
     button.dataset.revise = job.id;
     $("#modal-body .review-actions").append(button);
+  }
+  if (job.stale_upstream?.length) {
+    const notice = document.createElement("p");
+    notice.className = "banner";
+    notice.textContent = "上游内容已变化：请先核对下方提示与当前正文。工作台没有自动重写或取消本稿确认；再次确认仅记录你已复核当前上游，不等于旧正文已自动同步。";
+    $("#modal-body").prepend(notice);
+    const confirmButton = $('#modal-body [data-review="accepted"]');
+    if (confirmButton) confirmButton.textContent = "已复核上游变化，重新确认本稿";
+  }
+  const continuation = f1ContinuationAction(job);
+  if (continuation) {
+    const area = document.createElement("div");
+    area.className = "actions";
+    const button = document.createElement("button");
+    button.className = "primary";
+    button.textContent = continuation.label;
+    button.id = "continue-f1";
+    button.onclick = async () => {
+      try {
+        if (continuation.type === "job") return showJob(await api(`/api/jobs/${continuation.jobId}`));
+        if (continuation.type === "assemble") return assembleF1(continuation.taskKey, button);
+        activeWorkflow = "new-product";
+        activeWorkflowStage = continuation.type === "prototype" ? "prototype" : "analysis";
+        if (continuation.type === "prototype") {
+          tab = "tasks";
+          close();
+          draw();
+          return;
+        }
+        const referenceIds = (job.sources || []).filter((source) => source.kind === "upload").map((source) => source.source_id);
+        prepareTask(continuation.taskKey, { documentIds: referenceIds });
+      } catch (err) { error(err); }
+    };
+    area.appendChild(button);
+    $("#modal-body").appendChild(area);
   }
 }
 

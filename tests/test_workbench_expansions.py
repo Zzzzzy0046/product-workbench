@@ -341,24 +341,25 @@ def test_review_scraper_worker_is_safe_with_gbk_stdio(tmp_path):
 
 
 def test_batch_competitor_collection_waits_for_confirmation(tmp_path):
-    class ImageHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.send_header("Content-Type", "image/png")
-            self.send_header("Content-Length", str(len(PIXEL)))
-            self.end_headers()
-            self.wfile.write(PIXEL)
-
-        def log_message(self, *_):
-            pass
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), ImageHandler)
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
     tool = tmp_path / "competitor-tool"
     (tool / "app").mkdir(parents=True)
     (tool / "app" / "__init__.py").write_text("", encoding="utf-8")
     (tool / "app" / "scrapers.py").write_text(
+        # A store-CDN fixture respects the production origin policy.  Inject the
+        # response in this isolated fake backend rather than enabling localhost
+        # URLs or contacting the real CDN during the integration test.
+        "import sys, types\n"
+        f"_PIXEL = {PIXEL!r}\n"
+        "class ImageResponse:\n"
+        "    status_code = 200\n"
+        "    headers = {'Content-Type': 'image/png', 'Content-Length': str(len(_PIXEL))}\n"
+        "    def raise_for_status(self): pass\n"
+        "    def iter_content(self, chunk_size): yield _PIXEL\n"
+        "    def close(self): pass\n"
+        "def image_get(url, **kwargs):\n"
+        "    assert url == 'https://play-lh.googleusercontent.com/offline-test.png'\n"
+        "    return ImageResponse()\n"
+        "sys.modules['requests'] = types.SimpleNamespace(get=image_get)\n"
         "GOOGLE_LANGS = {'us': 'en'}\n"
         "def scrape_google_play(package_id, *args, **kwargs):\n"
         "    return [{'review_id':'r1','content':'真实评论','score':5,'market':'US','platform':'google_play','app_id':package_id}]\n"
@@ -368,8 +369,7 @@ def test_batch_competitor_collection_waits_for_confirmation(tmp_path):
     )
     (tool / "google_play_scraper.py").write_text(
         "def app(app_id, lang='en', country='us'):\n"
-        "    return {'title':'Test Emulator','summary':'Original short description','description':'Original long description','developer':'Test Studio','genre':'Tools','score':4.5,'ratings':10,'reviews':8,'installs':'1,000+','version':'1.0','lastUpdatedOn':'2026-09-15','url':'https://play.google.com/store/apps/details?id='+app_id,'screenshots':['http://127.0.0.1:%d/shot.png']}\n"
-        % server.server_port,
+        "    return {'title':'Test Emulator','summary':'Original short description','description':'Original long description','developer':'Test Studio','genre':'Tools','score':4.5,'ratings':10,'reviews':8,'installs':'1,000+','version':'1.0','lastUpdatedOn':'2026-09-15','url':'https://play.google.com/store/apps/details?id='+app_id,'screenshots':['https://play-lh.googleusercontent.com/offline-test.png']}\n",
         encoding="utf-8",
     )
     bench = app.Workbench(tmp_path / "data", runner=lambda _: "unused")
@@ -411,8 +411,6 @@ def test_batch_competitor_collection_waits_for_confirmation(tmp_path):
         assert {item["relation"] for item in links} == {"competitor-listing", "review-evidence", "competitor-screenshot"}
     finally:
         bench.close()
-        server.shutdown()
-        server.server_close()
 
 
 def test_quality_rules_block_duplicate_tracking_ids():

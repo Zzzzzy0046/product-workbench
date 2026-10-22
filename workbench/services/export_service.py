@@ -5,6 +5,120 @@ from workbench.services.base import BoundService
 
 
 class ExportService(BoundService):
+    _CAPTURE_LOCAL_KEYS = frozenset({
+        "adb", "adb_path", "python_path", "skill_root", "session_dir", "output_dir",
+        "cache", "anim_original",
+        "session_path", "root", "cwd", "codex_home", "cli", "cli_path",
+        "cli_command", "mcp", "mcp_servers", "bridge", "bridge_url",
+        "bridge_token", "connection", "connection_url", "connection_token",
+        "endpoint", "authorization", "headers", "env", "token", "api_key",
+        "access_token", "refresh_token", "secret", "password",
+    })
+
+    @classmethod
+    def _portable_capture_metadata(cls, value):
+        """Keep capture configuration and evidence identity, never local execution access."""
+        if isinstance(value, dict):
+            return {
+                key: cls._portable_capture_metadata(item)
+                for key, item in value.items()
+                if str(key).lower() not in cls._CAPTURE_LOCAL_KEYS
+                and not str(key).lower().startswith(("cli_", "mcp_", "codex_"))
+                and not str(key).lower().endswith(("_token", "_secret", "_password"))
+            }
+        if isinstance(value, list):
+            return [cls._portable_capture_metadata(item) for item in value]
+        return value
+
+    @staticmethod
+    def _capture_private_file(relative):
+        """Exclude model execution attempts without discarding capture timing evidence."""
+        parts = Path(relative).parts
+        name = parts[-1].lower() if parts else ""
+        return (
+            any(part.lower() == "attempts" for part in parts)
+            or name in {"progress.jsonl", "events.jsonl", "stdout-events.jsonl", "model-events.jsonl", "model_events.jsonl", "codex-events.jsonl"}
+            or name.endswith(".lock")
+            or name.startswith(("prompt.", "prompt-", "codex-diagnostics", "model-output", "agent-output"))
+        )
+
+    def _import_capture_sessions(self, scrape_target, old_project_id, new_project_id, product_version_map, document_map, renamed, competitor_map=None):
+        """Give imported captures isolated IDs and require a new device observation."""
+        capture_map = {}
+        for source in sorted(scrape_target.glob("android-*")):
+            if not source.is_dir():
+                continue
+            if not source.resolve().is_relative_to(scrape_target):
+                raise ValueError("项目包中的 Android 截图路径无效。")
+            metadata = source / "session.json"
+            if not metadata.is_file():
+                continue
+            try:
+                session = json.loads(metadata.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, ValueError) as exc:
+                raise ValueError("项目包中的 Android 截图会话无法读取。") from exc
+            if not isinstance(session, dict):
+                raise ValueError("项目包中的 Android 截图会话格式无效。")
+            old_id = str(session.get("id", ""))
+            if not ID_PATTERN.fullmatch(old_id) or source.name != "android-" + old_id or session.get("project_id") != old_project_id:
+                raise ValueError("项目包中的 Android 截图会话引用无效。")
+            new_id = uid()
+            capture_map[old_id] = new_id
+            destination = (scrape_target / ("android-" + new_id)).resolve()
+            if not destination.is_relative_to(scrape_target) or destination.exists():
+                raise ValueError("项目包中的 Android 截图目录无效。")
+            source.rename(destination)
+            renamed.append((source, destination))
+            session = self._portable_capture_metadata(session)
+            session.update({
+                "id": new_id,
+                "project_id": new_project_id,
+                "version_id": product_version_map.get(str(session.get("version_id", "")), ""),
+                "document_ids": [document_map[value] for value in session.get("document_ids", []) if isinstance(value, str) and value in document_map],
+                "competitor_id": (competitor_map or {}).get(str(session.get("competitor_id", "")), ""),
+            })
+            if session.get("status") in {"queued", "running", "prepared", "paused"}:
+                session.update({
+                    "status": "interrupted",
+                    "pause_reason": "从项目包导入，需重新检测设备和当前页面后手动继续。",
+                    "error": "导入时未继续执行截图走查。",
+                })
+            session["updated"] = now()
+            (destination / "session.json").write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
+            request_path = destination / "request.json"
+            if request_path.is_file():
+                try:
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError, ValueError) as exc:
+                    raise ValueError("项目包中的 Android 截图请求无法读取。") from exc
+                if not isinstance(request, dict):
+                    raise ValueError("项目包中的 Android 截图请求格式无效。")
+                request = self._portable_capture_metadata(request)
+                request.update({key: session[key] for key in ("id", "project_id", "version_id", "document_ids", "competitor_id")})
+                if "capture_id" in request:
+                    request["capture_id"] = new_id
+                request_path.write_text(json.dumps(request, ensure_ascii=False, indent=2), encoding="utf-8")
+            checkpoint_path = destination / "capture-session.json"
+            if checkpoint_path.is_file():
+                try:
+                    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError, ValueError) as exc:
+                    raise ValueError("项目包中的 Android 截图观察检查点无法读取。") from exc
+                if not isinstance(checkpoint, dict):
+                    raise ValueError("项目包中的 Android 截图观察检查点格式无效。")
+                checkpoint = {key: value for key, value in checkpoint.items() if str(key).lower() not in self._CAPTURE_LOCAL_KEYS}
+                checkpoint_path.write_text(json.dumps(checkpoint, ensure_ascii=False, indent=2), encoding="utf-8")
+            workspace_path = destination / "aw.json"
+            if workspace_path.is_file():
+                try:
+                    workspace = json.loads(workspace_path.read_text(encoding="utf-8"))
+                    if not isinstance(workspace, dict):
+                        raise ValueError("invalid walkthrough workspace")
+                except (OSError, UnicodeDecodeError, ValueError) as exc:
+                    raise ValueError("项目包中的新版截图工作区配置无法读取。") from exc
+                workspace_path.write_text(json.dumps(self._portable_capture_metadata(workspace), ensure_ascii=False, indent=2), encoding="utf-8")
+        return capture_map
+
     @staticmethod
     def _safe_export_name(value):
         value = re.sub(r"[\\/:*?\"<>|\x00-\x1f]+", "-", str(value or "交付物"))
@@ -25,7 +139,7 @@ class ExportService(BoundService):
         return json.dumps(sources, ensure_ascii=False)
 
     @staticmethod
-    def _portable_scrape_request(raw_request):
+    def _portable_scrape_request(raw_request, competitor_map=None):
         """Keep scraper parameters while omitting the local tool directory."""
         try:
             request = json.loads(raw_request or "{}") if isinstance(raw_request, str) else dict(raw_request or {})
@@ -34,6 +148,8 @@ class ExportService(BoundService):
         if not isinstance(request, dict):
             return "{}"
         request.pop("root", None)
+        if competitor_map is not None and "competitor_id" in request:
+            request["competitor_id"] = competitor_map.get(str(request["competitor_id"]), "")
         return json.dumps(request, ensure_ascii=False)
 
     def export_job(self, job_id, fmt, version=None):
@@ -80,7 +196,7 @@ class ExportService(BoundService):
         for item in jobs:
             item["sources"] = self._portable_sources(item.get("sources", "[]"))
         snapshot = {
-            "schema_version": 2,
+            "schema_version": 3,
             "exported_at": now(),
             "project": project,
             "product_versions": self.rows("SELECT * FROM product_versions WHERE project_id=? ORDER BY created", (project_id,)),
@@ -92,6 +208,8 @@ class ExportService(BoundService):
             "job_versions": self.rows("SELECT v.* FROM job_versions v JOIN jobs j ON j.id=v.job_id WHERE j.project_id=? ORDER BY v.job_id,v.version", (project_id,)),
             "document_comments": self.rows("SELECT c.* FROM document_comments c JOIN jobs j ON j.id=c.job_id WHERE j.project_id=? ORDER BY c.job_id,c.version,c.created", (project_id,)),
             "scrapes": self.rows("SELECT * FROM scrapes WHERE project_id=? ORDER BY created", (project_id,)),
+            "competitors": self.rows("SELECT * FROM competitors WHERE project_id=? ORDER BY created", (project_id,)),
+            "competitor_documents": self.rows("SELECT d.* FROM competitor_documents d JOIN competitors c ON c.id=d.competitor_id WHERE c.project_id=?", (project_id,)),
             "version_documents": self.rows(
                 """SELECT d.* FROM version_documents d
                    JOIN product_versions v ON v.id=d.version_id
@@ -114,7 +232,20 @@ class ExportService(BoundService):
             for path in root.rglob("*"):
                 if not path.is_file():
                     continue
+                if not path.resolve().is_relative_to(root):
+                    raise ValueError("项目文件路径校验失败。")
+                if prefix.startswith("runs/") and (
+                    path.name.startswith("codex-diagnostics") and path.suffix == ".log"
+                    or path.name.startswith("model-output") and path.suffix == ".md"
+                ):
+                    # Connection diagnostics and raw CLI attempts are local
+                    # troubleshooting files, not portable product deliverables.
+                    continue
                 relative = path.relative_to(root).as_posix()
+                capture_parts = Path(relative).parts
+                is_capture = prefix.startswith("scrapes/") and bool(capture_parts) and capture_parts[0].startswith("android-")
+                if is_capture and self._capture_private_file(Path(*capture_parts[1:])):
+                    continue
                 member = self._safe_archive_member(f"{prefix}/{relative}")
                 file_content = path.read_bytes()
                 # Run records are useful for handoff, but their image paths
@@ -132,6 +263,20 @@ class ExportService(BoundService):
                             file_content = json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8")
                     except (UnicodeDecodeError, ValueError, TypeError):
                         pass
+                elif is_capture and path.name in {"session.json", "request.json", "capture-session.json", "aw.json"}:
+                    try:
+                        record = json.loads(file_content.decode("utf-8"))
+                        if not isinstance(record, dict):
+                            raise ValueError("invalid capture metadata")
+                        # A checkpoint's pending action is original evidence;
+                        # sanitize only optional execution fields at its root.
+                        if path.name == "capture-session.json":
+                            record = {key: value for key, value in record.items() if str(key).lower() not in self._CAPTURE_LOCAL_KEYS}
+                        else:
+                            record = self._portable_capture_metadata(record)
+                        file_content = json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8")
+                    except (UnicodeDecodeError, ValueError, TypeError) as exc:
+                        raise ValueError("Android 截图会话元数据无法安全导出。") from exc
                 elif path.name == "request.json" and prefix.startswith("scrapes/"):
                     try:
                         request = json.loads(file_content.decode("utf-8"))
@@ -216,7 +361,7 @@ class ExportService(BoundService):
             raise ValueError("项目包元数据无法读取。") from exc
         if not isinstance(manifest, dict) or not isinstance(snapshot, dict):
             raise ValueError("项目包元数据结构无效。")
-        if manifest.get("package") != "workbench-project-v1" or int(snapshot.get("schema_version", 0)) not in {1, 2}:
+        if manifest.get("package") != "workbench-project-v1" or int(snapshot.get("schema_version", 0)) not in {1, 2, 3}:
             raise ValueError("项目包版本不受支持。")
         project = snapshot.get("project") or {}
         if not isinstance(project, dict):
@@ -246,6 +391,8 @@ class ExportService(BoundService):
             "document_comments": "批注",
             "scrapes": "评论采集记录",
             "version_documents": "版本资料关系",
+            "competitors": "竞品档案",
+            "competitor_documents": "竞品资料归属",
         }
         for key, label in collection_labels.items():
             value = snapshot.get(key, [])
@@ -280,7 +427,7 @@ class ExportService(BoundService):
             raise ValueError(f"项目包包含未登记文件：{sorted(unexpected)[0]}")
 
         new_project_id = uid()
-        for key, label in (("product_versions", "产品版本"), ("jobs", "任务"), ("documents", "资料"), ("conditions", "条件"), ("job_versions", "任务文档版本"), ("document_comments", "批注"), ("scrapes", "评论采集记录")):
+        for key, label in (("product_versions", "产品版本"), ("jobs", "任务"), ("documents", "资料"), ("conditions", "条件"), ("job_versions", "任务文档版本"), ("document_comments", "批注"), ("scrapes", "评论采集记录"), ("competitors", "竞品档案")):
             collection = collections[key]
             seen_ids = set()
             for item in collection:
@@ -306,6 +453,27 @@ class ExportService(BoundService):
         version_map = {str(item.get("id")): uid() for item in collections["job_versions"] if item.get("id")}
         comment_map = {str(item.get("id")): uid() for item in collections["document_comments"] if item.get("id")}
         scrape_map = {str(item.get("id")): uid() for item in collections["scrapes"] if item.get("id")}
+        competitor_map = {str(item.get("id")): uid() for item in collections["competitors"] if item.get("id")}
+        identities = set()
+        for item in collections["competitors"]:
+            identity = (str(item.get("platform", "")), str(item.get("app_id", "")))
+            if (str(item.get("id", "")) not in competitor_map or item.get("project_id") != old_project_id
+                    or identity[0] not in {"google_play", "app_store"} or not identity[1]
+                    or len(identity[1]) > 200 or not re.fullmatch(r"[A-Za-z0-9_.-]+", identity[1])
+                    or identity[0] == "app_store" and not identity[1].isdigit()
+                    or identity in identities or not isinstance(item.get("title"), str)):
+                raise ValueError("项目包中的竞品档案身份无效或重复。")
+            identities.add(identity)
+        link_keys = set()
+        for item in collections["competitor_documents"]:
+            if not isinstance(item, dict):
+                raise ValueError("项目包中的竞品资料归属无效。")
+            pair = (str(item.get("competitor_id", "")), str(item.get("document_id", "")))
+            if pair[0] not in competitor_map or pair[1] not in document_map or pair in link_keys:
+                raise ValueError("项目包中的竞品资料归属引用无效或重复。")
+            if item.get("material_type") not in {"store_info", "reviews", "store_screenshot", "device_screenshot", "module_flow", "note", "revenue", "attachment"}:
+                raise ValueError("项目包中的竞品资料类型无效。")
+            link_keys.add(pair)
         known_jobs = set(job_map)
         review_jobs = set()
         version_keys = set()
@@ -392,6 +560,43 @@ class ExportService(BoundService):
                             raise ValueError("项目包包含重复的图片文件。")
                         source.rename(destination)
                         renamed.append((source, destination))
+            # Collection rows receive new IDs too. Keep their staged evidence
+            # and manifest references in that namespace so imported previews
+            # and subsequent evidence shortcuts can still resolve documents.
+            scrape_target = (self.data / "scrapes" / new_project_id).resolve()
+            capture_map = {}
+            if scrape_target.is_dir():
+                for old_id, new_id in scrape_map.items():
+                    source = (scrape_target / old_id).resolve()
+                    destination = (scrape_target / new_id).resolve()
+                    if not source.is_relative_to(scrape_target) or not destination.is_relative_to(scrape_target):
+                        raise ValueError("项目包中的采集路径无效。")
+                    if not source.is_dir():
+                        continue
+                    if destination.exists():
+                        raise ValueError("项目包包含重复的采集目录。")
+                    source.rename(destination)
+                    renamed.append((source, destination))
+                    manifest_path = destination / "manifest.json"
+                    if manifest_path.is_file():
+                        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                        if not isinstance(manifest, dict):
+                            raise ValueError("项目包中的竞品资料清单格式无效。")
+                        manifest.update({
+                            "project_id": new_project_id,
+                            "scrape_id": new_id,
+                            "version_id": product_version_map.get(str(manifest.get("version_id", "")), ""),
+                            "document_ids": [document_map[value] for value in manifest.get("document_ids", []) if isinstance(value, str) and value in document_map],
+                            "listing_document_id": document_map.get(str(manifest.get("listing_document_id", "")), ""),
+                            "review_document_id": document_map.get(str(manifest.get("review_document_id", "")), ""),
+                            "competitor_id": competitor_map.get(str(manifest.get("competitor_id", "")), ""),
+                        })
+                        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+                    request_path = destination / "request.json"
+                    if request_path.is_file():
+                        request = json.loads(self._portable_scrape_request(request_path.read_text(encoding="utf-8"), competitor_map))
+                        request_path.write_text(json.dumps(request, ensure_ascii=False, indent=2), encoding="utf-8")
+                capture_map = self._import_capture_sessions(scrape_target, old_project_id, new_project_id, product_version_map, document_map, renamed, competitor_map)
             for old_job_id, new_job_id in job_map.items():
                 old_dir, new_dir = staging / "runs" / old_job_id, self.data / "runs" / new_job_id
                 if old_dir.is_dir():
@@ -423,6 +628,27 @@ class ExportService(BoundService):
                         "INSERT INTO documents(id,project_id,name,text,sha,created,kind,category,subcategory) VALUES(?,?,?,?,?,?,?,?,?)",
                         (new_id, new_project_id, item.get("name", "资料"), self._remap_asset_refs(item.get("text", ""), document_map), item.get("sha", ""), item.get("created", now()), item.get("kind", "upload"), item.get("category") or infer_material_category(item.get("name", "资料"), item.get("kind", "upload")), item.get("subcategory") or infer_image_subcategory(item.get("name", "资料"), item.get("category") or infer_material_category(item.get("name", "资料"), item.get("kind", "upload")))),
                     )
+                for item in collections["competitors"]:
+                    store_url = (f"https://play.google.com/store/apps/details?id={item['app_id']}" if item["platform"] == "google_play" else f"https://apps.apple.com/app/id{item['app_id']}")
+                    db.execute("INSERT INTO competitors(id,project_id,platform,app_id,title,source_url,role,note,archived,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (
+                        competitor_map[item["id"]], new_project_id, item["platform"], item["app_id"], item["title"][:300], store_url,
+                        str(item.get("role", ""))[:40], str(item.get("note", ""))[:4000], int(bool(item.get("archived", 0))), item.get("created", now()), item.get("updated", now())))
+                for item in collections["competitor_documents"]:
+                    metadata = item.get("metadata", "{}")
+                    try:
+                        metadata = json.loads(metadata) if isinstance(metadata, str) else metadata
+                        if not isinstance(metadata, dict):
+                            raise ValueError()
+                    except (ValueError, TypeError):
+                        raise ValueError("项目包中的竞品资料元数据无效。") from None
+                    for field, remapping in (("version_id", product_version_map), ("document_id", document_map), ("competitor_id", competitor_map)):
+                        if field in metadata:
+                            metadata[field] = remapping.get(str(metadata[field]), "")
+                    source_id = str(item.get("source_id", ""))
+                    source_id = scrape_map.get(source_id, capture_map.get(source_id, document_map.get(source_id, source_id)))
+                    db.execute("INSERT INTO competitor_documents(competitor_id,document_id,material_type,source_type,source_id,captured_at,metadata) VALUES(?,?,?,?,?,?,?)", (
+                        competitor_map[item["competitor_id"]], document_map[item["document_id"]], item["material_type"], str(item.get("source_type", "manual"))[:80], source_id,
+                        str(item.get("captured_at", ""))[:80], json.dumps(metadata, ensure_ascii=False)))
                 for item in collections["jobs"]:
                     old_id = str(item.get("id", ""))
                     status = item.get("status", "prepared")
@@ -446,7 +672,7 @@ class ExportService(BoundService):
                     scrape_error = item.get("error", "")
                     if item.get("status") in {"queued", "running", "ready"}:
                         scrape_error = "导入时未携带可继续确认的采集状态，请重新采集。"
-                    db.execute("INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,review_count,warning_count,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (scrape_map.get(str(item.get("id", "")), uid()), new_project_id, item.get("platform", ""), item.get("app_id", ""), self._portable_scrape_request(item.get("request", "{}")), scrape_status, document_map.get(str(item.get("result_doc_id", "")), ""), item.get("created", now()), item.get("updated", now()), scrape_error, int(item.get("review_count", 0) or 0), int(item.get("warning_count", 0) or 0), product_version_map.get(str(item.get("version_id", "")), "")))
+                    db.execute("INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,review_count,warning_count,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (scrape_map.get(str(item.get("id", "")), uid()), new_project_id, item.get("platform", ""), item.get("app_id", ""), self._portable_scrape_request(item.get("request", "{}"), competitor_map), scrape_status, document_map.get(str(item.get("result_doc_id", "")), ""), item.get("created", now()), item.get("updated", now()), scrape_error, int(item.get("review_count", 0) or 0), int(item.get("warning_count", 0) or 0), product_version_map.get(str(item.get("version_id", "")), "")))
                 for item in collections["version_documents"]:
                     db.execute(
                         "INSERT INTO version_documents(version_id,document_id,relation,created) VALUES(?,?,?,?)",
@@ -464,4 +690,9 @@ class ExportService(BoundService):
         finally:
             if staging.exists() and staging.is_relative_to(staging_root):
                 shutil.rmtree(staging, ignore_errors=True)
+        if int(snapshot.get("schema_version", 0)) < 3:
+            self.competitor_service.migrate_project(new_project_id)
+        else:
+            with self.db() as db:
+                db.execute("INSERT OR REPLACE INTO preferences(key,value) VALUES(?,?)", (self.competitor_service.MIGRATION + ":" + new_project_id, json.dumps({"completed": now()})))
         return self.project(new_project_id)

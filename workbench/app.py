@@ -19,8 +19,12 @@ from workbench.services.storage_service import StorageService
 from workbench.services.validation_service import ValidationService
 from workbench.services.version_service import VersionService
 from workbench.services.workflow_router_service import WorkflowRouterService
+from workbench.services.competitor_revenue_service import CompetitorRevenueService
+from workbench.services.competitor_service import CompetitorService
+from workbench.services.android_capture_service import AndroidCaptureService
 from workbench.adapters.lanhu_adapter import LanhuAdapter
 from workbench.adapters.review_scraper import ReviewScraperAdapter
+from workbench.adapters.competitor_discovery import CompetitorDiscoveryAdapter
 from workbench.adapters.codex_runner import CodexRunner
 from workbench.api.handler import Handler
 
@@ -51,12 +55,18 @@ class Workbench:
         self.material_service = MaterialService(self)
         self.export_service = ExportService(self)
         self.review_scraper = ReviewScraperAdapter(self)
+        self.competitor_discovery = CompetitorDiscoveryAdapter(self)
+        self.competitor_revenue = CompetitorRevenueService(self)
+        self.competitor_service = CompetitorService(self)
+        self.android_capture = AndroidCaptureService(self)
         self.retrieval_service = RetrievalService(self)
         self.job_service = JobService(self)
         self.codex_runner = CodexRunner(self)
         self.validation_service = ValidationService()
         self.storage_service = StorageService(self)
         self.storage_service.initialize()
+        self.android_capture.recover()
+        self.competitor_service.migrate()
 
     @contextmanager
     def db(self):
@@ -231,6 +241,12 @@ class Workbench:
     def start_competitor_collection(self, *args, **kwargs):
         return self.review_scraper.start_competitor_collection(*args, **kwargs)
 
+    def search_competitors(self, *args, **kwargs):
+        return self.competitor_discovery.search_competitors(*args, **kwargs)
+
+    def competitor_detail(self, *args, **kwargs):
+        return self.competitor_discovery.competitor_detail(*args, **kwargs)
+
     def _update_scrape(self, *args, **kwargs):
         return self.review_scraper._update_scrape(*args, **kwargs)
 
@@ -343,8 +359,10 @@ class Workbench:
         return self.codex_runner.stop_process(*args, **kwargs)
 
     def close(self):
+        self.android_capture.close()
+        self.competitor_discovery.close()
         with self.lock:
-            for process in list(self.scrape_processes.values()):
+            for process in list(self.processes.values()) + list(self.scrape_processes.values()):
                 self.stop_process(process)
             if self.retriever is not None:
                 self.retriever.close()
@@ -352,7 +370,13 @@ class Workbench:
 
     def state(self, project_id=None):
         runtime = self.retrieval_status()
-        runtime.update({"available":bool(codex_command()),"model":configured_model() or "CLI 默认模型","knowledge_count":len(self.knowledge())})
+        try:
+            cli_available = bool(codex_command())
+            cli_error = ""
+        except ValueError as exc:
+            cli_available = False
+            cli_error = str(exc)
+        runtime.update({"available":cli_available,"codex_error":cli_error,"model":configured_model() or "CLI 默认模型","knowledge_count":len(self.knowledge())})
         project = self.project(project_id) if project_id else None
         workflow_mode = project["workflow_mode"] if project else "fast"
         result = {"projects":self.rows("SELECT * FROM projects ORDER BY created DESC"),"trash":self.trash_items(),"packs":self.registry(),"workflows":self.workflows(workflow_mode),"tools":TOOLS,"runtime":runtime,"integrations":{"lanhu":self.lanhu_settings(),"review_scraper":self.review_scraper_settings()},"token":self.token}
@@ -375,6 +399,12 @@ class Workbench:
                 })
             for document in result["documents"]:
                 document["versions"] = links_by_document.get(document["id"], [])
+            result["competitors"] = self.competitor_service.list(project_id)["competitors"]
+            result["competitor_document_links"] = self.competitor_service.document_links(project_id)
+            for document in result["documents"]:
+                associations = [link for link in result["competitor_document_links"] if link["document_id"] == document["id"]]
+                document["competitor_ids"] = [link["competitor_id"] for link in associations]
+                document["competitor_material_types"] = {link["competitor_id"]: link["material_type"] for link in associations}
             result["scrapes"] = self.scrapes(project_id)
             result["jobs"] = self.rows("""SELECT j.id,j.title,j.task_id,j.status,j.created,j.updated,j.error,j.workflow_mode,j.parent_job_id,j.revision_number,j.revision_reason,j.source_version,j.archived,j.version_id,v.name AS version_name,
                 CASE WHEN EXISTS(SELECT 1 FROM jobs child WHERE child.parent_job_id=j.id) THEN 0 ELSE 1 END AS is_latest,

@@ -181,9 +181,13 @@ class MaterialService(BoundService):
                 invalid.append(document_id)
         return invalid
 
-    def add_document(self, project_id, name, content, version_id="", relation="evidence", category="", subcategory=""):
+    def add_document(self, project_id, name, content, version_id="", relation="evidence", category="", subcategory="", competitor_id="", material_type=""):
         self.project(project_id)
         product_version = self.version_service.resolve(project_id, version_id)
+        if competitor_id:
+            self.competitor_service.get(project_id, competitor_id)
+            if material_type and material_type not in self.competitor_service.MATERIAL_TYPES:
+                raise ValueError("竞品资料类型无效。")
         if not isinstance(name, str) or not name or len(name) > 180 or any(c in name for c in '/\\\x00'):
             raise ValueError("文件名无效。")
         if not content or len(content) > MAX_FILE:
@@ -193,6 +197,8 @@ class MaterialService(BoundService):
         if existing:
             if product_version:
                 self.version_service.link_document(project_id, existing[0]["id"], product_version["id"], relation)
+            if competitor_id:
+                self.competitor_service.attach_documents(project_id, competitor_id, [existing[0]["id"]], material_type)
             return {**existing[0],"duplicate":True}
         try:
             text = extract(name, content)
@@ -219,6 +225,8 @@ class MaterialService(BoundService):
             )
         if product_version:
             self.version_service.link_document(project_id, document_id, product_version["id"], relation)
+        if competitor_id:
+            self.competitor_service.attach_documents(project_id, competitor_id, [document_id], material_type)
         return {"id":document_id,"name":name,"characters":len(text),"duplicate":False}
 
     def set_document_category(self, project_id, document_id, category):
@@ -389,6 +397,7 @@ class MaterialService(BoundService):
                 path.unlink(missing_ok=True)
                 with self.db() as db:
                     db.execute("DELETE FROM version_documents WHERE document_id=?", (document_id,))
+                    db.execute("DELETE FROM competitor_documents WHERE document_id=?", (document_id,))
                     db.execute(
                         "DELETE FROM documents WHERE id=? AND project_id=? AND kind='upload'",
                         (document_id, project_id),

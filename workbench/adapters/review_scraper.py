@@ -2,6 +2,7 @@
 
 from workbench.core.runtime import *
 from workbench.services.base import BoundService
+from workbench.core.competitor_markets import GLOBAL_MARKETS
 
 
 class ReviewScraperAdapter(BoundService):
@@ -14,6 +15,22 @@ class ReviewScraperAdapter(BoundService):
                 saved = json.loads(rows[0]["value"])
             except (TypeError, ValueError):
                 saved = {}
+        if not isinstance(saved, dict):
+            saved = {}
+        explicit_root = str(saved.get("root") or os.environ.get("WORKBENCH_REVIEW_SCRAPER_ROOT", "")).strip()
+        if getattr(sys, "frozen", False) and not explicit_root:
+            root = ROOT / "packages" / "competitor-collector"
+            ready = all((root / "competitor_collector" / filename).is_file() for filename in ("engine.py", "scrapers.py"))
+            return {
+                "root": str(root),
+                "worker_root": "",
+                "backend": "builtin",
+                "python": sys.executable,
+                "source": "随包原生采集器",
+                "ready": ready,
+                "enabled": bool(saved.get("enabled", True)),
+                "message": "已检测到随包竞品资料采集器。" if ready else "随包竞品资料采集器不完整，请重新解压或安装工作台。",
+            }
         default_root = Path.home() / "Desktop" / "competitor-analysis-platform"
         root_value = str(
             saved.get("root")
@@ -52,6 +69,8 @@ class ReviewScraperAdapter(BoundService):
             message = "竞品评论采集器暂不可用。"
         return {
             "root": str(root),
+            "worker_root": str(root),
+            "backend": "legacy",
             "python": str(python) if python else "",
             "source": "saved" if saved else "默认桌面路径",
             "ready": ready,
@@ -60,6 +79,19 @@ class ReviewScraperAdapter(BoundService):
         }
 
     def save_review_scraper_settings(self, payload):
+        if getattr(sys, "frozen", False):
+            builtin_root = (ROOT / "packages" / "competitor-collector").resolve()
+            requested = str(payload.get("root") or "").strip()
+            current = self.review_scraper_settings()
+            if (requested and Path(requested).expanduser().resolve() == builtin_root) or (not requested and current.get("backend") == "builtin"):
+                # The existing form round-trips its displayed root before collect.
+                # Never persist the temporary one-file extraction path as legacy.
+                with self.db() as db:
+                    db.execute("INSERT OR REPLACE INTO preferences VALUES(?,?)", (
+                        REVIEW_SCRAPER_CONFIG_KEY,
+                        json.dumps({"enabled": bool(payload.get("enabled", True))}),
+                    ))
+                return self.review_scraper_settings()
         root_value = str(
             payload.get("root")
             or os.environ.get("WORKBENCH_REVIEW_SCRAPER_ROOT", "")
@@ -121,13 +153,17 @@ class ReviewScraperAdapter(BoundService):
         manifest = self._collection_manifest(item)
         listing = manifest.get("listing") if isinstance(manifest.get("listing"), dict) else {}
         item.update({
-            "collection_type": "competitor" if request.get("collect_listing") else "reviews",
+            "collection_type": "competitor" if request.get("requires_confirmation") or request.get("collect_listing") else "reviews",
+            "competitor_id": str(request.get("competitor_id") or ""),
             "listing_title": str(listing.get("title") or ""),
             "listing_market": str(listing.get("market") or ""),
             "has_short_description": bool(str(listing.get("short_description") or "").strip()),
             "has_long_description": bool(str(listing.get("long_description") or "").strip()),
             "screenshot_count": len(listing.get("screenshot_files") or []),
             "document_ids": manifest.get("document_ids") or [],
+            "listing_document_id": str(manifest.get("listing_document_id") or ""),
+            "review_document_id": str(manifest.get("review_document_id") or ""),
+            "selection": request.get("selection") if isinstance(request.get("selection"), dict) else {},
             "translation_requested": bool(request.get("translate")),
             "translated_count": int(manifest.get("translated_count") or 0),
             "filter_stats": manifest.get("filter_stats") if isinstance(manifest.get("filter_stats"), dict) else {},
@@ -135,7 +171,46 @@ class ReviewScraperAdapter(BoundService):
         if include_listing:
             item["listing"] = listing
             item["warnings"] = manifest.get("warnings") or []
+            item["review_samples"] = self._review_samples(item)
+            item["screenshot_preview_urls"] = self._screenshot_preview_urls(listing)
         return item
+
+    def _review_samples(self, scrape):
+        path = self._collection_directory(scrape) / "reviews.csv"
+        if not path.is_file() or path.stat().st_size > MAX_FILE:
+            return []
+        samples = []
+        try:
+            with path.open("r", encoding="utf-8-sig", newline="") as stream:
+                for row in csv.DictReader(stream):
+                    samples.append({
+                        "original_content": str(row.get("original_content") or row.get("content") or "")[:2000],
+                        "translated_content": str(row.get("translated_content") or "")[:2000],
+                        "score": str(row.get("score") or "")[:20],
+                        "published_at": str(row.get("published_at") or "")[:80],
+                        "title": str(row.get("title") or "")[:300],
+                    })
+                    if len(samples) >= 5:
+                        break
+        except (OSError, UnicodeDecodeError, csv.Error):
+            return []
+        return samples
+
+    @staticmethod
+    def _screenshot_preview_urls(listing):
+        previews = []
+        for value in (listing.get("screenshot_urls") or [])[:20]:
+            url = str(value or "")[:2400]
+            try:
+                parsed = urlparse(url)
+            except ValueError:
+                continue
+            host = (parsed.hostname or "").lower()
+            if parsed.scheme == "https" and not parsed.username and not parsed.password and any(host == domain or host.endswith("." + domain) for domain in ("googleusercontent.com", "ggpht.com", "mzstatic.com", "apple.com")):
+                previews.append(url)
+                if len(previews) >= 6:
+                    break
+        return previews
 
     @staticmethod
     def _parse_competitor_entry(value):
@@ -168,7 +243,7 @@ class ReviewScraperAdapter(BoundService):
         return {"platform": platform, "app_id": app_id, "source_url": source_url}
 
     def start_competitor_collection(self, project_id, payload):
-        """Queue a user-supplied competitor list; discovery is intentionally excluded."""
+        """Queue only the competitors explicitly selected or pasted by the user."""
         self.project(project_id)
         if not isinstance(payload, dict):
             raise ValueError("采集参数无效。")
@@ -178,6 +253,15 @@ class ReviewScraperAdapter(BoundService):
             raw_entries = raw_entries.splitlines()
         if not isinstance(raw_entries, list):
             raise ValueError("竞品列表格式无效。")
+        raw_entries = list(raw_entries)
+        dossier_selections = {}
+        selected_ids = payload.get("competitor_ids", [])
+        if not isinstance(selected_ids, list) or len(selected_ids) > 8:
+            raise ValueError("请选择最多 8 个竞品档案。")
+        for identifier in selected_ids:
+            competitor = self.competitor_service.get(project_id, identifier)
+            raw_entries.append(competitor["source_url"])
+            dossier_selections[(competitor["platform"], competitor["app_id"])] = competitor
         entries, seen = [], set()
         for raw in raw_entries:
             if not str(raw or "").strip():
@@ -189,14 +273,50 @@ class ReviewScraperAdapter(BoundService):
                 entries.append(entry)
         if not entries or len(entries) > 8:
             raise ValueError("请提供 1–8 个由你确认的竞品链接或应用 ID。")
+        selections = self._selection_metadata(payload.get("selections"), entries)
+        collection_options = payload.get("collection_options") or {}
+        if not isinstance(collection_options, dict):
+            raise ValueError("每个竞品的采集选项无效。")
+
+        def checked(options, names, default):
+            for name in names:
+                if name in options:
+                    if not isinstance(options[name], bool):
+                        raise ValueError("采集勾选项必须为布尔值。")
+                    return options[name]
+            return default
+
+        prepared_dossiers = []
+        for entry in entries:
+            key = (entry["platform"], entry["app_id"])
+            selection = selections.get(key) or dossier_selections.get(key) or {}
+            competitor = None
+            if hasattr(self._workbench, "competitor_service"):
+                existing_dossiers = self.rows("SELECT * FROM competitors WHERE project_id=? AND platform=? AND app_id=?", (project_id, entry["platform"], entry["app_id"]))
+                competitor = existing_dossiers[0] if existing_dossiers else None
+                if competitor and competitor.get("archived"):
+                    raise ValueError("所选竞品已归档，请先恢复该档案再采集。")
+            specific = collection_options.get(competitor["id"] if competitor else entry["app_id"], {})
+            if not isinstance(specific, dict):
+                raise ValueError("每个竞品的采集选项无效。")
+            options = {**payload, **specific}
+            listing = checked(options, ("collect_listing", "collect_store_info", "store_info"), True)
+            screenshots = checked(options, ("collect_screenshots", "download_screenshots", "store_screenshots"), True)
+            reviews = checked(options, ("collect_reviews", "reviews"), True)
+            if not (listing or screenshots or reviews):
+                raise ValueError("每个竞品至少勾选商店信息、评论或商店截图中的一项。")
+            prepared_dossiers.append((entry, competitor, selection, listing, screenshots, reviews))
         raw_countries = payload.get("countries", [])
         if isinstance(raw_countries, str):
             raw_countries = re.split(r"[,，\s]+", raw_countries)
-        countries = []
+        requested_countries, countries = [], []
         for value in raw_countries if isinstance(raw_countries, list) else []:
             country = str(value).strip().lower()
-            if country and country not in countries:
-                countries.append(country)
+            if country and country not in requested_countries:
+                requested_countries.append(country)
+            for concrete in (GLOBAL_MARKETS if country == "global" else (country,)):
+                if concrete and concrete not in countries:
+                    countries.append(concrete)
         if not countries or len(countries) > 20 or any(not re.fullmatch(r"[a-z]{2}", item) for item in countries):
             raise ValueError("至少提供一个两位国家代码，最多 20 个。")
         try:
@@ -215,25 +335,38 @@ class ReviewScraperAdapter(BoundService):
         review_filters = self._review_filter_request(payload)
         if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1", (project_id,)):
             raise ValueError("当前项目已有竞品采集任务执行中，请等待完成。")
+        # Validate the entire request before creating any dossier or batch.
+        if hasattr(self._workbench, "competitor_service"):
+            prepared_dossiers = [(entry, self.competitor_service.upsert(project_id, {
+                **entry, "title": selection.get("title") or entry["app_id"], "role": selection.get("role") or "", "note": selection.get("note") or ""}),
+                selection, listing, screenshots, reviews) for entry, _, selection, listing, screenshots, reviews in prepared_dossiers]
         stamp = now()
         scrape_ids = []
         with self.db() as db:
-            for entry in entries:
+            for entry, competitor, selection, listing, screenshots, reviews in prepared_dossiers:
                 scrape_id = uid()
                 request = {
                     **entry,
                     "countries": countries,
+                    "requested_countries": requested_countries,
+                    "collection_scope": "global_multi_market" if "global" in requested_countries else "selected_markets",
                     "count_per_country": min(100, count) if entry["platform"] == "app_store" else count,
                     "sort": sort,
                     "date_from": date_from,
                     "date_to": date_to,
                     "version_id": product_version["id"] if product_version else "",
-                    "collect_listing": True,
-                    "translate": bool(payload.get("translate", True)),
+                    "collect_listing": listing or screenshots,
+                    "save_listing": listing,
+                    "download_screenshots": screenshots,
+                    "collect_reviews": reviews,
+                    "competitor_id": competitor["id"] if competitor else "",
+                    "translate": bool(payload.get("translate", True)) and reviews,
                     "translation_batch_size": 20,
                     "requires_confirmation": True,
                     **review_filters,
                 }
+                if selection:
+                    request["selection"] = {key: selection[key] for key in ("platform", "app_id", "role", "note", "title", "query", "search_country", "lookup_country", "observed_countries") if key in selection}
                 db.execute(
                     "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
                     (scrape_id, project_id, entry["platform"], entry["app_id"], json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", product_version["id"] if product_version else ""),
@@ -243,7 +376,63 @@ class ReviewScraperAdapter(BoundService):
         for scrape_id in scrape_ids:
             self.scrape_threads[scrape_id] = worker
         worker.start()
-        return {"count": len(scrape_ids), "items": [self.scrape(item) for item in scrape_ids]}
+        total_review_fetch_limit = sum(len(countries) * (min(100, count) if entry["platform"] == "app_store" else count) for entry, _, _, _, _, reviews in prepared_dossiers if reviews)
+        collection_warnings = [f"本次按 {len(countries)} 个具体市场、{len(entries)} 个应用采集，筛选前评论理论上限共 {total_review_fetch_limit} 条；实际条数可能更少，翻译只覆盖每应用前 500 条。"]
+        if "global" in requested_countries:
+            collection_warnings.append("“全球”已展开为 US、GB、DE、JP、IN、ID、BR、SA 八个预设市场，不是所有国家；未向商店接口传入 global。")
+        return {"count": len(scrape_ids), "items": [self.scrape(item) for item in scrape_ids], "countries": countries, "requested_countries": requested_countries, "total_review_fetch_limit": total_review_fetch_limit, "warnings": collection_warnings}
+
+    @staticmethod
+    def _selection_metadata(raw, entries):
+        if raw is None:
+            return {}
+        if not isinstance(raw, list) or len(raw) > 8:
+            raise ValueError("竞品选用信息格式无效，最多 8 项。")
+        expected = {(entry["platform"], entry["app_id"]) for entry in entries}
+        selected = {}
+        for item in raw:
+            if not isinstance(item, dict):
+                raise ValueError("竞品选用信息格式无效。")
+            key = (str(item.get("platform") or ""), str(item.get("app_id") or ""))
+            if key not in expected or key in selected:
+                raise ValueError("竞品选用信息必须与待采集的竞品一一对应，不能重复或添加其他应用。")
+            role = str(item.get("role") or "")
+            if role not in {"primary", "feature", "monetization"}:
+                raise ValueError("请选择主对标、功能参考或变现参考。")
+            clean = {"platform": key[0], "app_id": key[1], "role": role}
+            for field, limit in (("note", 1000), ("title", 300), ("query", 160)):
+                value = str(item.get(field) or "").strip()
+                if len(value) > limit or any(ord(character) < 32 and character not in "\r\n\t" for character in value):
+                    raise ValueError(f"竞品选用{field}字段过长或含无效字符。")
+                clean[field] = value
+            search_country = str(item.get("search_country") or "").strip().lower()
+            if search_country and search_country != "global" and not re.fullmatch(r"[a-z]{2}", search_country):
+                raise ValueError("竞品发现市场必须为两位国家代码或 global（8个预设市场合并）。")
+            if search_country:
+                clean["search_country"] = search_country
+            lookup_country = str(item.get("lookup_country") or "").strip().lower()
+            if lookup_country and not re.fullmatch(r"[a-z]{2}", lookup_country):
+                raise ValueError("竞品详情市场必须是具体两位国家代码，不能为 global。")
+            if lookup_country:
+                clean["lookup_country"] = lookup_country
+            observed = item.get("observed_countries") or []
+            if not isinstance(observed, list) or len(observed) > 20:
+                raise ValueError("竞品发现市场列表无效，最多 20 个具体国家。")
+            normalized_observed = []
+            for value in observed:
+                country = str(value or "").strip().lower()
+                if not re.fullmatch(r"[a-z]{2}", country):
+                    raise ValueError("竞品发现市场列表只能包含具体两位国家代码。")
+                if country not in normalized_observed:
+                    normalized_observed.append(country)
+            if normalized_observed:
+                clean["observed_countries"] = normalized_observed
+                if lookup_country and lookup_country not in normalized_observed:
+                    raise ValueError("竞品详情市场必须属于该候选已观察到的市场。")
+            selected[key] = clean
+        if set(selected) != expected:
+            raise ValueError("每个待采集竞品都需要对应的选用角色。")
+        return selected
 
     def _run_collection_batch(self, scrape_ids):
         for scrape_id in scrape_ids:
@@ -254,10 +443,10 @@ class ReviewScraperAdapter(BoundService):
                 continue
 
     @staticmethod
-    def _listing_markdown(listing):
+    def _listing_markdown(listing, selection=None):
         platform = "Google Play" if listing.get("platform") == "google_play" else "App Store"
         yes_no = lambda value: "是" if value is True else "否" if value is False else "未提供"
-        return "\n".join([
+        lines = [
             f"# {listing.get('title') or listing.get('app_id') or '竞品'}商店信息",
             "",
             f"- 平台：{platform}",
@@ -291,21 +480,33 @@ class ReviewScraperAdapter(BoundService):
             "## 证据说明",
             "",
             "以上字段是指定市场商店页面的采集快照；未提供字段保持为空，不使用模型补写或翻译。",
-        ])
+        ]
+        if isinstance(selection, dict) and selection.get("role"):
+            labels = {"primary": "主对标", "feature": "功能参考", "monetization": "变现参考"}
+            plain = lambda value: " ".join(str(value or "").split())
+            search_market = plain(selection.get("search_country")).upper()
+            if search_market == "GLOBAL":
+                search_market = "全球（US、GB、DE、JP、IN、ID、BR、SA 八个预设市场合并，非所有国家或全球榜）"
+            lines += ["", "## 人工选用信息", "", f"- 选用角色：{labels.get(selection['role'], '未指定')}", f"- 参考范围或备注：{plain(selection.get('note')) or '未填写'}", f"- 来源搜索词：{plain(selection.get('query')) or '直接粘贴链接或应用 ID'}", f"- 发现市场：{search_market or '未记录'}（仅指找到候选时的搜索市场；本次实际采集市场以本页“市场”字段为准）", "- 以上为使用者的参考选择，不代表已验证的市场排名、收入、广告机制或产品结论。"]
+            if selection.get("lookup_country"):
+                lines.append(f"- 候选详情参考市场：{plain(selection['lookup_country']).upper()}（候选卡片数值来自该市场，不是全球汇总）")
+            if selection.get("observed_countries"):
+                lines.append("- 搜索中观察到的市场：" + "、".join(plain(country).upper() for country in selection["observed_countries"]))
+        return "\n".join(lines)
 
     def _stage_collection_result(self, scrape, request, result, directory):
         listing = result.get("listing") if isinstance(result.get("listing"), dict) else None
-        reviews = result.get("reviews") if isinstance(result.get("reviews"), list) else []
+        reviews = result.get("reviews") if request.get("collect_reviews", True) and isinstance(result.get("reviews"), list) else []
         warnings = [str(item)[:300] for item in (result.get("warnings") or []) if str(item).strip()]
-        if listing:
+        if listing and request.get("save_listing", True):
             (directory / "store-listing.json").write_text(json.dumps(listing, ensure_ascii=False, indent=2), encoding="utf-8")
-            (directory / "store-listing.md").write_text(self._listing_markdown(listing), encoding="utf-8")
+            (directory / "store-listing.md").write_text(self._listing_markdown(listing, request.get("selection")), encoding="utf-8")
         if reviews:
             csv_content = self._review_csv(reviews)
             if len(csv_content) > MAX_FILE:
                 raise ValueError("评论 CSV 超过 12 MB，请减少国家数量或每国条数后重试。")
             (directory / "reviews.csv").write_bytes(csv_content)
-        if not listing and not reviews:
+        if not reviews and not (listing and (request.get("save_listing", True) or listing.get("screenshot_files"))):
             return None
         manifest = {
             "schema": 1,
@@ -323,6 +524,8 @@ class ReviewScraperAdapter(BoundService):
             ),
             "warnings": warnings,
             "filter_stats": result.get("filter_stats") if isinstance(result.get("filter_stats"), dict) else {},
+            "selection": request.get("selection") if isinstance(request.get("selection"), dict) else {},
+            "competitor_id": request.get("competitor_id", ""),
             "created_at": now(),
         }
         (directory / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -336,16 +539,21 @@ class ReviewScraperAdapter(BoundService):
                 raise ValueError("只有待确认的竞品资料可以入库。")
             directory = self._collection_directory(scrape).resolve()
             manifest = self._collection_manifest(scrape)
+            request = json.loads(scrape.get("request") or "{}")
             listing = manifest.get("listing") if isinstance(manifest.get("listing"), dict) else {}
             if not directory.is_dir() or not manifest:
                 raise ValueError("竞品采集暂存资料不存在，请重新采集。")
             files = []
             for filename, relation in (("store-listing.md", "competitor-listing"), ("reviews.csv", "review-evidence")):
+                if filename == "store-listing.md" and not request.get("save_listing", True):
+                    continue
+                if filename == "reviews.csv" and not request.get("collect_reviews", True):
+                    continue
                 path = (directory / filename).resolve()
                 if path.is_relative_to(directory) and path.is_file():
                     files.append((path, relation))
             screenshots = directory / "screenshots"
-            if screenshots.is_dir():
+            if screenshots.is_dir() and request.get("download_screenshots", True):
                 for path in sorted(screenshots.iterdir()):
                     resolved = path.resolve()
                     if resolved.is_relative_to(screenshots.resolve()) and resolved.suffix.lower() in IMAGE_SUFFIXES and resolved.is_file():
@@ -387,6 +595,8 @@ class ReviewScraperAdapter(BoundService):
                 result_doc_id=review_doc_id or listing_doc_id or document_ids[0],
                 updated=now(),
             )
+            if hasattr(self._workbench, "competitor_service"):
+                self.competitor_service.bind_scrape(self.rows("SELECT * FROM scrapes WHERE id=?", (scrape_id,))[0])
         return self.scrape(scrape_id)
 
     def retry_scrape(self, scrape_id):
@@ -445,10 +655,12 @@ class ReviewScraperAdapter(BoundService):
         env["PYTHONIOENCODING"] = "utf-8"
         payload = {
             "mode": "translate",
-            "root": settings["root"],
+            "root": settings.get("worker_root", settings["root"]),
             "batch_size": 20,
             "items": items,
         }
+        if settings.get("backend") == "builtin":
+            payload["translation_provider"] = "google"
         try:
             completed = subprocess.run(
                 command,
@@ -718,6 +930,11 @@ class ReviewScraperAdapter(BoundService):
             "translation_batch_size": 20,
             **review_filters,
         }
+        if hasattr(self._workbench, "competitor_service"):
+            competitor = self.competitor_service.upsert(project_id, {"platform": platform, "app_id": app_id})
+            if competitor.get("archived"):
+                raise ValueError("该竞品已归档，请先恢复档案再采集。")
+            request["competitor_id"] = competitor["id"]
         scrape_id = uid()
         stamp = now()
         with self.db() as db:
@@ -736,6 +953,8 @@ class ReviewScraperAdapter(BoundService):
         assignments = ",".join(f"{key}=?" for key in values)
         with self.db() as db:
             db.execute(f"UPDATE scrapes SET {assignments} WHERE id=?", (*values.values(), scrape_id))
+        if values.get("status") in {"ready", "completed"} and hasattr(self._workbench, "competitor_service"):
+            self.competitor_service.bind_scrape(self.rows("SELECT * FROM scrapes WHERE id=?", (scrape_id,))[0])
 
     def _run_review_scrape(self, scrape_id):
         process = None
@@ -747,7 +966,9 @@ class ReviewScraperAdapter(BoundService):
             if not settings["ready"] or not settings["enabled"]:
                 raise ValueError(settings["message"])
             request = json.loads(scrape["request"] or "{}")
-            request["root"] = settings["root"]
+            request["root"] = settings.get("worker_root", settings["root"])
+            if settings.get("backend") == "builtin" and request.get("translate"):
+                request["translation_provider"] = "google"
             directory = self.data / "scrapes" / scrape["project_id"] / scrape_id
             directory.mkdir(parents=True, exist_ok=True)
             if request.get("collect_listing"):
@@ -801,7 +1022,7 @@ class ReviewScraperAdapter(BoundService):
                         warning_count=len(warnings),
                     )
                     return
-                if not reviews:
+                if not reviews and request.get("collect_reviews", True):
                     warning = "；".join(filter(None, [warning, "没有采集到评论；商店资料仍可确认入库"]))
                 self._update_scrape(
                     scrape_id,

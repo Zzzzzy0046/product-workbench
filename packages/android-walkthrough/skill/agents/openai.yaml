@@ -1,0 +1,4 @@
+interface:
+  display_name: "Android App 走查"
+  short_description: "通过 ADB 单步走查 Android App，自动关广告，按模块输出真实流程截图拼图"
+  default_prompt: "使用 $android-walkthrough 走查目标 Android App：先 doctor/init，按模块单步采集并登记状态，最后 build 输出流程拼图和缺口说明。"

@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>竞品资料采集器</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+  <script src="/screens.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="竞品资料采集器首页"><span class="brand-mark" aria-hidden="true">C<span>↗</span></span><span>竞品资料采集器<small>COMPETITOR COLLECTOR</small></span></a>
+    <div class="topbar-right"><div class="connection"><span id="connection-dot" class="status-dot"></span><span id="connection-text">正在连接本地服务</span><span id="version" class="version"></span></div><div id="account-actions" class="account-actions" hidden><span id="current-user"></span><button id="change-password" type="button" class="text-button">修改密码</button><button id="logout" type="button" class="text-button">退出</button></div></div>
+  </header>
+  <section id="login-panel" class="login-panel" aria-labelledby="login-heading">
+    <div class="login-intro"><span class="eyebrow">PRIVATE COLLECTIONS</span><h1 id="login-heading">登录你的采集空间。</h1><p>成员之间的采集记录与文件相互隔离。<br>账号由管理员分配。</p></div>
+    <form id="login-form" class="login-card" novalidate>
+      <span class="login-card-label">账号登录</span>
+      <div id="setup-notice" class="alert warning" hidden>首次使用需在本机双击启动脚本设置管理员。设置完成后刷新此页面；此处不提供公开注册。</div>
+      <div id="login-fields"><label class="field-label" for="login-username">用户名</label><input id="login-username" name="username" type="text" autocomplete="username" required maxlength="80" placeholder="管理员分配的账号"><label class="field-label" for="login-password">密码</label><input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="输入密码"></div>
+      <div id="login-error" class="alert error" role="alert" hidden></div>
+      <button id="login-submit" type="submit" class="primary-button" disabled><span>正在检查服务…</span><span aria-hidden="true">↗</span></button>
+      <p class="field-note">没有账号或忘记密码？请联系此采集器的管理员。</p>
+    </form>
+  </section>
+  <section id="admin-panel" class="admin-panel" hidden><details id="admin-details"><summary><span>账号管理 <small>仅管理员可见</small></span><span class="chevron" aria-hidden="true">⌄</span></summary><div class="admin-body"><div class="admin-intro"><h2>管理员与成员</h2><p>成员之间资料隔离；管理员管理账号，可查看实机截图记录、释放设备占用，但不能替其他成员操作手机。</p></div><form id="create-user-form" class="create-user-form" novalidate><div><label class="field-label" for="new-username">新用户名</label><input id="new-username" type="text" autocomplete="off" maxlength="80" placeholder="例如：product_01"></div><div><label class="field-label" for="new-user-password">初始密码</label><input id="new-user-password" type="password" autocomplete="new-password" placeholder="设置初始密码"></div><div><label class="field-label" for="new-user-role">角色</label><select id="new-user-role"><option value="member">成员</option><option value="admin">管理员</option></select></div><button id="create-user" type="submit" class="secondary-button">创建账号</button></form><div id="admin-feedback" class="alert" role="status" hidden></div><div class="users-heading"><span>账号列表</span><button id="refresh-users" type="button" class="text-button">刷新</button></div><div id="users-list" class="users-list"></div></div></details></section>
+  <nav id="collector-navigation" class="collector-navigation" aria-label="采集能力" hidden>
+    <button id="nav-store" type="button" class="collector-nav active" aria-pressed="true" aria-controls="workspace">商店资料采集<small>描述 · 评论 · 宣传截图</small></button>
+    <button id="nav-screens" type="button" class="collector-nav" aria-pressed="false" aria-controls="screens-workspace">App 实机截图<small>真实页面 · 模块 · 操作流程</small></button>
+  </nav>
+  <main id="workspace" class="workspace" hidden>
+    <aside class="capture-pane">
+      <div class="pane-heading"><span class="eyebrow">01 / INPUT</span><h1>放入链接，开始采集。</h1><p>你选竞品，这里收集商店资料、用户评论和商店截图。</p></div>
+      <form id="capture-form" novalidate>
+        <label class="field-label" for="entries">竞品链接或 App ID <span class="required">*</span></label>
+        <textarea id="entries" name="entries" rows="5" required spellcheck="false" placeholder="每行一个，支持多个竞品&#10;https://play.google.com/store/apps/details?id=…&#10;https://apps.apple.com/us/app/…/id123456789&#10;也可填写 Android 包名 / iOS 数字 ID"></textarea>
+        <p class="field-note">支持 Google Play、App Store；不会自动搜索或选择竞品。</p>
+        <div class="section-rule"></div>
+        <div class="field-top"><label class="field-label" for="market-toggle">采集国家 / 地区</label><button id="global-markets" type="button" class="text-button">全球 8 市场样本</button></div>
+        <details id="market-picker" class="market-picker">
+          <summary id="market-toggle"><span id="market-summary">美国</span><span class="chevron" aria-hidden="true">⌄</span></summary>
+          <div id="market-options" class="market-options"></div>
+        </details>
+        <div id="selected-markets" class="selected-markets" aria-label="已选市场"></div>
+        <p class="field-note">“全球”选择 8 个代表市场，不是全世界。条数按每个竞品、每个国家计算。</p>
+        <div class="form-row">
+          <div><label class="field-label" for="count">每国评论条数</label><input id="count" type="number" min="1" max="500" step="1" value="100" inputmode="numeric"></div>
+          <div><label class="field-label" for="sort">评论排序</label><select id="sort"><option value="newest">最新发布</option><option value="relevant">最相关</option></select></div>
+        </div>
+        <p class="field-note count-note">每国最多 500 条；App Store 受来源限制，实际最多 100 条。</p>
+        <fieldset class="collect-options"><legend class="field-label">需要采集什么</legend>
+          <label class="check-option"><input id="collect-listing" type="checkbox" checked><span>商店资料<small>名称、长短描述、评分等</small></span></label>
+          <label class="check-option"><input id="collect-reviews" type="checkbox" checked><span>用户评论<small>原文、评分、时间、版本</small></span></label>
+          <label class="check-option"><input id="collect-screenshots" type="checkbox" checked><span>商店截图<small>宣传截图，不是 App 内实机截图</small></span></label>
+        </fieldset>
+        <details class="filter-details" id="review-filters"><summary>评论筛选 <span id="filter-count" class="tiny-tag" hidden></span><span class="chevron" aria-hidden="true">＋</span></summary>
+          <div class="filter-body">
+            <fieldset class="rating-options"><legend class="field-label">评分 <span class="muted">不选即全部</span></legend><div class="rating-grid"><label><input type="checkbox" name="rating" value="1"><span>1 ★</span></label><label><input type="checkbox" name="rating" value="2"><span>2 ★</span></label><label><input type="checkbox" name="rating" value="3"><span>3 ★</span></label><label><input type="checkbox" name="rating" value="4"><span>4 ★</span></label><label><input type="checkbox" name="rating" value="5"><span>5 ★</span></label></div></fieldset>
+            <label class="field-label" for="include-keywords">包含关键词</label><input id="include-keywords" type="text" placeholder="多个词用逗号分隔，命中任意一个">
+            <label class="field-label" for="exclude-keywords">排除关键词</label><input id="exclude-keywords" type="text" placeholder="例如：广告, crash">
+            <div class="form-row"><div><label class="field-label" for="date-from">起始日期</label><input id="date-from" type="date"></div><div><label class="field-label" for="date-to">结束日期</label><input id="date-to" type="date"></div></div>
+            <div class="form-row"><div><label class="field-label" for="reply-filter">开发者回复</label><select id="reply-filter"><option value="any">全部</option><option value="replied">有回复</option><option value="unreplied">无回复</option></select></div><div><label class="field-label" for="min-thumbs">最低点赞数</label><input id="min-thumbs" type="number" min="0" step="1" value="0"></div></div>
+            <label class="field-label" for="version-filter">评论对应版本</label><input id="version-filter" type="text" placeholder="留空即全部版本">
+            <p class="field-note">筛选在本次已采集评论中进行，不保证商店存在足量匹配结果。不同平台可提供的字段不同。</p>
+          </div>
+        </details>
+        <div class="translation-box"><label class="check-option"><input id="translate" type="checkbox" disabled><span>评论翻译为中文 <small id="translation-status">检查翻译能力中…</small></span></label><p class="field-note">开启后将把评论内容发送至 Google 翻译；原文仍保留。</p></div>
+        <div id="form-error" class="alert error" role="alert" hidden></div>
+        <button id="submit" class="primary-button" type="submit" disabled><span>开始采集</span><span aria-hidden="true">↗</span></button>
+        <p class="local-note">本地保存 · 独立运行 · 不依赖产品工作台</p>
+      </form>
+    </aside>
+    <section class="results-pane" aria-labelledby="results-heading">
+      <div class="results-top"><div><span class="eyebrow">02 / PRIVATE COLLECTIONS</span><h2 id="results-heading">我的采集结果 <span id="jobs-count" class="count-badge">0</span></h2></div><button id="refresh" type="button" class="secondary-button">↻ 刷新</button></div>
+      <div id="results-error" class="alert error" role="alert" hidden></div>
+      <div id="empty-state" class="empty-state"><div class="empty-graphic" aria-hidden="true"><span class="paper back"></span><span class="paper front"><i></i><i></i><i></i><b>↙</b></span></div><h3>把资料收在一起</h3><p>填入竞品链接，采集完成后在这里查看<br>长短描述、截图，以及可读的评论中英对照。</p><div class="empty-format"><span>商店资料 MD / JSON</span><span>评论 CSV</span><span>截图原图</span><span>整包 ZIP</span></div></div>
+      <div id="jobs" class="jobs" aria-live="polite" aria-relevant="additions"></div>
+      <footer class="results-footer"><span>数据来自所选商店公开信息，国家、语言与采集时间可能影响结果。</span><span id="output-path"></span></footer>
+    </section>
+  </main>
+  <main id="screens-workspace" class="screens-workspace" hidden aria-labelledby="screens-heading">
+    <aside class="screens-setup">
+      <div class="pane-heading"><span class="eyebrow">01 / ANDROID DEVICE</span><h1 id="screens-heading">把真实页面串成流程。</h1><p>连接 Android 真机或模拟器，逐步操作、截图，再按模块拼成流程图。不是商店宣传图，也不会一键遍历整个 App。</p></div>
+      <div id="screens-capability" class="alert warning" role="status">打开后检查本机截图能力。</div>
+      <button id="screens-devices-refresh" type="button" class="secondary-button">查找已连接设备</button>
+      <form id="screens-create-form" novalidate>
+        <label class="field-label" for="screens-device">设备</label><select id="screens-device" disabled><option value="">先查找设备</option></select>
+        <label class="field-label" for="screens-app-search">查找已安装 App</label><input id="screens-app-search" type="search" placeholder="输入包名筛选" disabled autocomplete="off">
+        <select id="screens-app" aria-label="已安装 App" disabled><option value="">先选择设备</option></select>
+        <label class="field-label" for="screens-title">截图任务名称 <span class="muted">可选</span></label><input id="screens-title" type="text" maxlength="120" placeholder="例如：GBA 竞品 · 首次使用">
+        <p class="field-note">设备需开启 USB 调试并在手机上确认授权。这里只读取已安装 App，不会自动安装、登录或操作购买。</p>
+        <button id="screens-create" type="submit" class="primary-button" disabled><span>创建截图任务</span><span aria-hidden="true">↗</span></button>
+      </form>
+      <div id="screens-error" class="alert error" role="alert" hidden></div>
+      <div class="screens-list-heading"><h2>截图记录</h2><button id="screens-refresh" type="button" class="text-button">刷新</button></div>
+      <div id="screens-sessions" class="screens-sessions"></div>
+    </aside>
+    <section class="screens-detail" aria-label="实机截图工作区">
+      <div id="screens-empty" class="screens-empty"><span class="eyebrow">02 / REAL APP SCREENS</span><div class="screen-outline" aria-hidden="true"><span></span><i></i><i></i></div><h2>先选设备，再打开目标 App。</h2><p>每次点击、返回或滑动后会获取新截图。<br>给需要的页面填写模块与名称，最后导出模块流程 PNG 和整包 ZIP。</p><div class="empty-format"><span>实机原图</span><span>模块流程 PNG</span><span>结构化页面记录</span></div></div>
+      <section id="screens-current" hidden>
+        <div class="screens-current-heading"><div><span class="eyebrow">02 / REAL APP SCREENS</span><h2 id="screens-current-title"></h2><p id="screens-current-meta"></p></div><div id="screens-session-actions" class="screens-session-actions"></div></div>
+        <div id="screens-readonly" class="alert warning" hidden>这是其他成员的记录，仅可查看和下载；不能操作其设备。</div>
+        <div class="screens-toolbar"><button id="screens-launch" type="button" class="secondary-button">打开目标 App</button><button id="screens-observe" type="button" class="secondary-button">获取当前截图</button><span id="screens-operation-status" role="status"></span></div>
+        <p class="field-note screens-control-note">只操作当前目标 App。系统权限、账号、支付等敏感页面请在手机上处理后，再获取当前截图。不会自动授权或购买。</p>
+        <div id="screens-observation-note" class="alert warning" hidden></div>
+        <div class="screens-live-grid">
+          <div class="screens-preview"><button id="screens-image-open" class="screens-phone" type="button" aria-label="放大当前实机截图" disabled><img id="screens-image" alt="当前 Android App 实机截图" hidden><span id="screens-image-empty">尚未获取截图</span></button><p id="screens-observation-time" class="field-note"></p></div>
+          <div class="screens-inspector">
+            <section class="screens-controls" aria-labelledby="screens-controls-heading"><h3 id="screens-controls-heading">操作当前页面</h3><div class="screens-gesture-controls"><button type="button" class="secondary-button" data-screen-action="back">返回</button><button type="button" class="secondary-button" data-screen-swipe="up">上滑</button><button type="button" class="secondary-button" data-screen-swipe="down">下滑</button><button type="button" class="secondary-button" data-screen-swipe="left">左滑</button><button type="button" class="secondary-button" data-screen-swipe="right">右滑</button></div><p class="field-note">下方为当前截图识别到的可点击元素。每次操作后都会重新获取页面，不复用旧坐标。</p><div id="screens-elements" class="screens-elements"></div></section>
+            <form id="screens-label-form" class="screens-label-form" novalidate><h3>把这页放进模块</h3><label class="field-label" for="screens-module">模块</label><input id="screens-module" type="text" list="screens-module-options" maxlength="100" placeholder="例如：游戏导入"><datalist id="screens-module-options"></datalist><div class="form-row"><div><label class="field-label" for="screens-page">页面</label><input id="screens-page" type="text" maxlength="100" placeholder="例如：本地文件"></div><div><label class="field-label" for="screens-state">状态 <span class="muted">可选</span></label><input id="screens-state" type="text" maxlength="100" placeholder="例如：空状态"></div></div><button id="screens-label" type="submit" class="secondary-button">保存当前页到模块</button><p class="field-note">按实际操作顺序连接已保存的截图；没有走过的路径不会补成已验证流程。</p></form>
+          </div>
+        </div>
+        <div class="screens-saved-heading"><div><h3>已整理的模块与页面</h3><p class="field-note">先保存页面，再生成模块流程图。重复页面和分支沿用实际截图记录。</p></div><button id="screens-export" type="button" class="secondary-button">生成模块流程 PNG</button></div>
+        <div id="screens-saved" class="screens-saved"></div>
+        <div id="screens-flows" class="screens-flows"></div>
+      </section>
+    </section>
+  </main>
+  <dialog id="image-dialog" class="image-dialog"><button id="close-image" class="close-image" aria-label="关闭截图">×</button><img id="large-image" alt="竞品商店截图"><p id="image-caption"></p></dialog>
+  <dialog id="password-dialog" class="account-dialog"><form id="password-form" novalidate><div class="dialog-heading"><h2>修改我的密码</h2><button type="button" class="dialog-close" data-close="password-dialog" aria-label="关闭">×</button></div><p class="field-note">修改成功后，当前登录会退出，请用新密码重新登录。</p><label class="field-label" for="current-password">当前密码</label><input id="current-password" type="password" autocomplete="current-password"><label class="field-label" for="new-password">新密码</label><input id="new-password" type="password" autocomplete="new-password"><label class="field-label" for="confirm-password">确认新密码</label><input id="confirm-password" type="password" autocomplete="new-password"><div id="password-error" class="alert error" role="alert" hidden></div><button id="password-submit" type="submit" class="primary-button"><span>保存新密码</span><span aria-hidden="true">↗</span></button></form></dialog>
+  <dialog id="reset-dialog" class="account-dialog"><form id="reset-form" novalidate><div class="dialog-heading"><h2>重置账号密码</h2><button type="button" class="dialog-close" data-close="reset-dialog" aria-label="关闭">×</button></div><p id="reset-target" class="field-note"></p><label class="field-label" for="reset-password">新密码</label><input id="reset-password" type="password" autocomplete="new-password"><div id="reset-error" class="alert error" role="alert" hidden></div><button id="reset-submit" type="submit" class="primary-button"><span>确认重置</span><span aria-hidden="true">↗</span></button></form></dialog>
+</body>
+</html>

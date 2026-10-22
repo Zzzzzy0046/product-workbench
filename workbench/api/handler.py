@@ -22,7 +22,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length",str(len(body)))
         self.send_header("X-Content-Type-Options","nosniff")
         self.send_header("Cache-Control","no-store")
-        self.send_header("Content-Security-Policy","default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
+        self.send_header("Content-Security-Policy","default-src 'self'; img-src 'self' blob: https://play-lh.googleusercontent.com https://lh3.googleusercontent.com https://*.mzstatic.com; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
         if filename:
             self.send_header("Content-Disposition", attachment_header(filename))
         self.end_headers()

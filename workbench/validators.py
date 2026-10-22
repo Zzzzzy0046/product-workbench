@@ -220,7 +220,7 @@ def validate(
             "fast/f1-flow-monetization": [
                 ("flow", ("主要流程", "核心任务流程", "再次使用流程"), "产品主要流程"),
                 ("monetization", ("商业化", "Subscription", "IAP", "Ads"), "商业化方案"),
-                ("handoff", ("进入 PRD", "F2 需要", "PRD 交接"), "F2 交接范围"),
+                ("handoff", ("进入 PRD", "F2 需要", "PRD 交接", "下一步交接", "原型设计输入", "本轮交接"), "本轮下一步交接范围"),
             ],
         }
         for code, words, label in section_checks[task_id]:
@@ -236,7 +236,7 @@ def validate(
     elif task_id == "fast/core-prd":
         checks = [
             ("page", ("页面", "功能"), "页面或功能定义"),
-            ("entry", ("入口", "进入方式"), "入口"),
+            ("entry", ("入口", "进入方式", "进入来源", "页面进入"), "入口"),
             ("state", ("Loading", "Empty", "Error", "加载", "空状态", "错误"), "状态说明"),
             ("failure", ("失败", "取消", "超时", "重试", "恢复"), "失败或恢复规则"),
             ("copy", ("英文 UI", "UI copy", "英文文案", "按钮文案"), "英文 UI copy"),
@@ -291,6 +291,53 @@ def validate(
                     "有资料依据时补 [Sx]；属于产品方案时写“本轮拟定”；依赖实现的数值写“待研发确认”。",
                 )
             )
+
+    elif task_id == "fast/flow-pages":
+        if not _has_any(text, ("→", "-->", "流程")):
+            issues.append(_issue("flow-missing-route", "warning", "没有找到可读的主流程。", "补充入口、主要操作、结果和返回去向。"))
+        page_tables = [table for table in _markdown_tables(text) if _column(table["headers"], "稳定 ID", "页面 ID", "页面/状态 ID", "页面编号", "页面与状态") is not None]
+        if not page_tables:
+            issues.append(_issue("flow-page-index", "warning", "没有找到页面与状态清单。", "用中文名和稳定 ID 区分独立页面、弹窗、局部状态和系统界面。"))
+        ids = []
+        for table in page_tables:
+            index = _column(table["headers"], "稳定 ID", "页面 ID", "页面/状态 ID", "页面编号", "页面与状态")
+            for row in table["rows"]:
+                match = re.search(r"\b[A-Za-z][A-Za-z0-9]*-?\d+(?:[.-][A-Za-z0-9]+)*\b", _cell(row["cells"], index))
+                if match:
+                    ids.append(match.group(0).upper())
+        duplicated = sorted({value for value in ids if ids.count(value) > 1})
+        if duplicated:
+            issues.append(_issue("flow-duplicate-page-id", "error", f"页面或状态 ID 重复定义：{', '.join(duplicated[:8])}。", "同一 ID 只定义一个对象；引用现有页面时写在进入或去向列。"))
+
+    elif task_id == "fast/shared-rules":
+        if not _has_any(text, ("RULE-", "规则 ID", "规则编号")):
+            issues.append(_issue("rules-missing-id", "warning", "公共规则缺少可供页面引用的编号。", "保留已有规则 ID，新规则分配稳定 ID。"))
+        if not _has_any(text, ("涉及页面", "影响页面", "关联页面", "适用页面", "适用模块")):
+            issues.append(_issue("rules-missing-targets", "warning", "公共规则没有说明适用页面或模块。", "标出受影响的页面，让后续修改能定位。"))
+
+    elif task_id == "fast/product-acceptance":
+        tables = [table for table in _markdown_tables(text) if _column(table["headers"], "验收场景") is not None]
+        expected_headers = ["验收场景", "操作步骤", "预期结果"]
+        if not tables:
+            issues.append(_issue("product-acceptance-table", "warning", "没有找到产品验收用例表。", "按模块使用“验收场景｜操作步骤｜预期结果”三列表格。"))
+        for table in tables:
+            if [_normal_header(value) for value in table["headers"]] != expected_headers:
+                issues.append(_issue("product-acceptance-columns", "error", "产品验收用例未使用约定的三列格式。", "只保留验收场景、操作步骤、预期结果；实测与状态放到按需的开发实测清单。"))
+            if any(len(row["cells"]) != 3 or any(_is_blank_cell(value) for value in row["cells"][:3]) for row in table["rows"]):
+                issues.append(_issue("product-acceptance-incomplete", "warning", "部分验收用例缺少场景、操作或预期。", "每行写一个可实际操作并判断结果的场景。"))
+        if re.search(r"(?:实测结果|当前结果|验收结论)\s*[：:]\s*(?:PASS|通过|已通过)", text, re.IGNORECASE):
+            issues.append(_issue("product-acceptance-execution", "warning", "产品验收用例中混入了实测通过结论。", "本任务只定义预期；真实执行结果请使用开发实测清单并附实际证据。"))
+
+    elif task_id in {"fast/prototype-handoff", "fast/review-changes", "fast/consistency-review"}:
+        if task_id == "fast/prototype-handoff" and not _has_any(text, ("页面", "状态", "旁注")):
+            issues.append(_issue("prototype-page-notes", "warning", "没有找到页面或相邻需求说明。", "按本轮模块列出页面和业务主题说明，并明确外部原型执行位置。"))
+        if task_id == "fast/review-changes" and not _has_any(text, ("原意见", "评审意见", "修改意见")):
+            issues.append(_issue("review-missing-request", "warning", "没有说明修订对应的真实意见。", "逐条对应原意见、受影响对象和具体修订内容。"))
+        if task_id == "fast/consistency-review" and not _has_any(text, ("冲突", "一致性", "差异", "未覆盖")):
+            issues.append(_issue("consistency-comparison", "warning", "没有找到跨资料的对照结论。", "列出核对对象、各自口径、采用依据和仍待同步的位置。"))
+        external_claim = re.search(r"(?:已(?:完成)?(?:写入|修改|更新|同步)(?:当前)?\s*(?:Figma|Axure|蓝湖)|(?:Figma|Axure|蓝湖)\s*(?:原型)?已(?:完成)?(?:更新|同步|修改))", text, re.IGNORECASE)
+        if external_claim:
+            issues.append(_issue("document-external-write-claim", "warning", "生成文档中出现外部原型已修改或已同步的表述。", "工作台本任务只生成文档；请依据外部实际回读与截图说明落实状态，未执行的对象保留待同步。"))
 
     elif task_id == "fast/tracking-spec":
         tables = _markdown_tables(text)
@@ -435,19 +482,26 @@ def validate(
         passed_rows_without_evidence = []
         for table in _markdown_tables(text):
             headers = table["headers"]
-            if _column(headers, "QA ID") is None or _column(headers, "状态") is None:
+            # Preserve product-facing case IDs inside the scenario cell; an
+            # independent QA-ID column is not required by the current F3.
+            identity_index = _column(headers, "QA ID", "验收场景", "页面/场景", "原事件 ID", "事件 ID")
+            if identity_index is None or _column(headers, "状态") is None:
                 continue
             status_index = _column(headers, "状态")
-            evidence_index = _column(headers, "日志/截图/录像/报告", "证据")
+            evidence_index = _column(headers, "日志/截图/录像/报告", "实际日志", "证据")
             for row in table["rows"]:
                 status = _plain_cell(_cell(row["cells"], status_index)).upper()
-                if status in {"PASS", "PASSED", "通过", "已通过"}:
+                if status in {"PASS", "PASSED", "PARTIAL_PASS", "部分通过", "通过", "已通过"}:
                     pass_claim_lines.append(row["line"])
-                    if _is_blank_cell(_cell(row["cells"], evidence_index)):
+                    evidence_cell = _cell(row["cells"], evidence_index)
+                    if _is_blank_cell(evidence_cell) or re.fullmatch(
+                        r"尚未(?:提供|产生|测试)|未(?:提供|测试)|暂无|无|NOT_RUN",
+                        _plain_cell(evidence_cell), re.IGNORECASE,
+                    ):
                         passed_rows_without_evidence.append(row["line"])
         for line_number, line in enumerate(text.splitlines(), 1):
             plain = _plain_cell(line)
-            if re.search(r"核心流程\s*[：:]\s*(?:PASS|通过|已通过)(?:\s|$|；|。)", plain, re.IGNORECASE):
+            if re.search(r"(?:核心流程|本轮实测结论)\s*[：:]\s*(?:PASS|部分通过|通过|已通过)(?:\s|$|；|。)", plain, re.IGNORECASE):
                 pass_claim_lines.append(line_number)
             if re.search(r"可以进入内部测试\s*[：:]\s*是(?:\s|$|；|。)", plain):
                 pass_claim_lines.append(line_number)

@@ -35,8 +35,9 @@ TOOLS = [
     {"id":"project-search", "name":"项目资料检索", "status":"ready", "description":"项目隔离 Hybrid RAG；不可用时自动回退关键词检索。"},
     {"id":"knowledge-search", "name":"方法与模板检索", "status":"ready", "description":"组合全局只读 Product KB，为项目证据补充方法和模板。"},
     {"id":"codex", "name":"Codex 生成引擎", "status":"ready", "description":"通过本机已登录的 Codex CLI 执行，使用本机默认模型；实际就绪状态见运行环境。"},
-    {"id":"review-scraper", "name":"竞品资料采集器", "status":"ready", "description":"用户指定竞品后，复用桌面工具环境采集商店长短描述、宣传截图和原始评论；不调用分析、翻译或 AI。"},
+    {"id":"review-scraper", "name":"竞品资料采集器", "status":"ready", "description":"用户指定竞品后，复用桌面工具环境采集商店长短描述、宣传截图和原始评论；可选生成中文译文，不自动选择竞品或启动分析。"},
     {"id":"lanhu-mcp", "name":"蓝湖 MCP 原型读取", "status":"manual", "description":"通过当前会话的 Lanhu MCP 只读页面与状态，再将脱敏快照导入项目；工作台不保存 Cookie 或 Token。"},
+    {"id":"android-capture", "name":"Android 实机截图走查", "status":"ready", "description":"指定已安装 App 和走查范围，调用截图 skill 自动观察、记录模块流程并生成 PNG；确认后加入项目资料，需本机 ADB 与 Codex。"},
 ]
 LANHU_CONFIG_KEY = "integration:lanhu"
 LANHU_PACKAGE_PATTERN = re.compile(r"^[A-Za-z0-9_.@/-]+$")
@@ -146,7 +147,18 @@ FAST_ACCEPTED_UPSTREAM_TASKS = {
         "fast/f1-positioning-scope",
         "fast/f1-product-solution",
     },
-    "fast/core-prd": {"fast/new-product-analysis", "fast/version-brief"},
-    "fast/tracking-spec": {"fast/core-prd"},
-    "fast/acceptance": {"fast/core-prd", "fast/tracking-spec"},
+    "fast/shared-rules": {"fast/new-product-analysis", "fast/version-brief"},
+    "fast/flow-pages": {"fast/shared-rules", "fast/new-product-analysis", "fast/version-brief"},
+    "fast/prototype-handoff": {"fast/flow-pages", "fast/shared-rules"},
+    "fast/review-changes": {"fast/prototype-handoff", "fast/flow-pages", "fast/shared-rules", "fast/core-prd"},
+    "fast/consistency-review": {"fast/review-changes", "fast/prototype-handoff", "fast/flow-pages", "fast/shared-rules", "fast/core-prd"},
+    "fast/core-prd": {"fast/consistency-review", "fast/review-changes", "fast/prototype-handoff", "fast/flow-pages", "fast/shared-rules", "fast/new-product-analysis", "fast/version-brief"},
+    "fast/tracking-spec": {"fast/core-prd", "fast/prototype-handoff", "fast/flow-pages", "fast/shared-rules"},
+    "fast/product-acceptance": {"fast/core-prd", "fast/prototype-handoff", "fast/flow-pages", "fast/shared-rules", "fast/consistency-review"},
+    "fast/acceptance": {"fast/core-prd", "fast/product-acceptance", "fast/tracking-spec", "fast/shared-rules"},
+}
+FAST_PAGE_FIRST_TASKS = {
+    "fast/shared-rules", "fast/flow-pages", "fast/prototype-handoff",
+    "fast/review-changes", "fast/consistency-review", "fast/product-acceptance",
+    "fast/core-prd", "fast/tracking-spec", "fast/acceptance",
 }

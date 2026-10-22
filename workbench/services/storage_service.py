@@ -20,6 +20,10 @@ class StorageService(BoundService):
                 CREATE TABLE IF NOT EXISTS document_comments(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,version INTEGER NOT NULL,block_id TEXT NOT NULL,block_type TEXT NOT NULL,block_label TEXT NOT NULL,quote TEXT NOT NULL,action TEXT NOT NULL,note TEXT NOT NULL,status TEXT NOT NULL,author TEXT NOT NULL,created TEXT NOT NULL,updated TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS conditions(id TEXT PRIMARY KEY,project_id TEXT,title TEXT,owner TEXT,due TEXT,status TEXT,evidence TEXT,block_level TEXT,review_date TEXT,created TEXT,updated TEXT);
                 CREATE TABLE IF NOT EXISTS scrapes(id TEXT PRIMARY KEY,project_id TEXT,platform TEXT,app_id TEXT,request TEXT,status TEXT,result_doc_id TEXT,created TEXT,updated TEXT,error TEXT,review_count INTEGER NOT NULL DEFAULT 0,warning_count INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE IF NOT EXISTS competitors(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,platform TEXT NOT NULL,app_id TEXT NOT NULL,title TEXT NOT NULL,source_url TEXT NOT NULL DEFAULT '',role TEXT NOT NULL DEFAULT '',note TEXT NOT NULL DEFAULT '',archived INTEGER NOT NULL DEFAULT 0,created TEXT NOT NULL,updated TEXT NOT NULL,UNIQUE(project_id,platform,app_id));
+                CREATE TABLE IF NOT EXISTS competitor_documents(competitor_id TEXT NOT NULL,document_id TEXT NOT NULL,material_type TEXT NOT NULL DEFAULT 'attachment',source_type TEXT NOT NULL DEFAULT 'manual',source_id TEXT NOT NULL DEFAULT '',captured_at TEXT NOT NULL,metadata TEXT NOT NULL DEFAULT '{}',PRIMARY KEY(competitor_id,document_id));
+                CREATE INDEX IF NOT EXISTS competitors_project ON competitors(project_id,updated);
+                CREATE INDEX IF NOT EXISTS competitor_documents_document ON competitor_documents(document_id);
                 CREATE INDEX IF NOT EXISTS documents_project ON documents(project_id);
                 CREATE INDEX IF NOT EXISTS product_versions_project ON product_versions(project_id,updated);
                 CREATE INDEX IF NOT EXISTS version_documents_document ON version_documents(document_id);

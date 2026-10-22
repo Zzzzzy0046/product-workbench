@@ -9,7 +9,7 @@ evidence_level: approved-plan
 status: active
 source:
   - source-workflow-implementation-v1
-reviewed_at: 2026-09-10
+reviewed_at: 2026-10-21
 expires_at:
 supersedes: []
 tags: [Gate, formal-only, G1, G2, G3, G4, G5]
@@ -17,7 +17,7 @@ tags: [Gate, formal-only, G1, G2, G3, G4, G5]
 
 # 工作流 Gate
 
-默认快速流程不使用 Gate、风险清单或条件闭环。F1 新品分析完成后直接进入 F2 核心 PRD；F3 用实际结果、日志、截图和复测记录开发验收。
+默认快速流程不使用 Gate、风险清单或条件闭环。日常按市场与竞品分析、原型图＋需求说明、初审修改、终审整理和需求评审继续当前工作，不强制生成全套文档。独立 F2、完整埋点和 F3 实测按需；已有原型、评审或模块资料时可直接开始相应任务。
 
 只有用户明确要求正式机会判断、阶段评审或历史完整流程时才使用：
 

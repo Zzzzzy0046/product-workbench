@@ -16,3 +16,12 @@ tmp/
 audit/
 # Business project artifacts stay local; reusable methods/templates are versioned.
 projects/
+# Local builds, smoke data and backups may contain project/account state.
+/work/
+/build/
+/dist/
+**/node_modules/
+# Independent experiments and generated/business documents are not app source.
+/sites/
+/模板导出/
+/docs/prd/

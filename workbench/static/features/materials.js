@@ -78,9 +78,10 @@ function filterMaterialLibrary() {
     button.setAttribute("aria-pressed", String(active));
   });
   const status = $("#material-filter-status");
-  if (status) status.textContent = visibleCount ? `当前显示 ${visibleCount} 份` : "没有符合条件的资料";
+  const hasMaterials = Boolean(root.querySelector("[data-material-item]"));
+  if (status) status.textContent = visibleCount ? `当前显示 ${visibleCount} 份` : hasMaterials ? "没有符合条件的资料" : "尚未添加资料";
   const empty = $("#material-filter-empty");
-  if (empty) empty.hidden = visibleCount > 0;
+  if (empty) empty.hidden = visibleCount > 0 || !hasMaterials;
 }
 
 const acceptedMaterialSuffixes = new Set(["md", "txt", "csv", "json", "pdf", "docx", "png", "jpg", "jpeg", "webp"]);
@@ -108,19 +109,20 @@ function pendingMaterialId() {
 function renderPendingMaterials() {
   const container = $("#pending-materials");
   if (!container) return;
-  if (!pendingMaterialFiles.length) {
+  const scopedFiles = pendingMaterialFiles.filter((item) => !item.project || (item.project === projectId && item.version === (currentVersion()?.id || "")));
+  if (!scopedFiles.length) {
     container.innerHTML = '<div class="paste-empty">暂存区还没有资料。你可以连续截图并按 Ctrl+V，最后再统一上传。</div>';
     return;
   }
-  const totalSize = pendingMaterialFiles.reduce((sum, item) => sum + item.file.size, 0);
-  const previews = pendingMaterialFiles.map((item) => {
+  const totalSize = scopedFiles.reduce((sum, item) => sum + item.file.size, 0);
+  const previews = scopedFiles.map((item) => {
     const suffix = String(item.file.name).split(".").pop().toLowerCase();
     const preview = item.objectUrl
       ? `<img src="${E(item.objectUrl)}" alt="${E(item.file.name)} 预览">`
       : `<div class="pending-file-type">${E(suffix.toUpperCase())}</div>`;
-    return `<article class="pending-material">${preview}<div><strong>${E(item.file.name)}</strong><small>${E(readableBytes(item.file.size))}${item.pasted ? " · 剪贴板截图" : ""}</small></div><button class="icon-button" data-remove-pending-material="${E(item.id)}" aria-label="移除 ${E(item.file.name)}">×</button></article>`;
+    return `<article class="pending-material">${preview}<div><strong>${E(item.file.name)}</strong><small>${E(readableBytes(item.file.size))}${item.pasted ? " · 剪贴板截图" : ""} · 归属 ${E(item.competitorTitle || "项目公共资料")}</small></div><button class="icon-button" data-remove-pending-material="${E(item.id)}" aria-label="移除 ${E(item.file.name)}">×</button></article>`;
   }).join("");
-  container.innerHTML = `<div class="pending-toolbar"><div><strong>待上传 ${pendingMaterialFiles.length} 份</strong><small>共 ${E(readableBytes(totalSize))}，确认后才写入项目</small></div><div class="actions"><button class="small" data-clear-pending-materials>清空</button><button class="primary" data-upload-pending-materials>一并上传</button></div></div><div class="pending-grid">${previews}</div>`;
+  container.innerHTML = `<div class="pending-toolbar"><div><strong>待上传 ${scopedFiles.length} 份</strong><small>共 ${E(readableBytes(totalSize))}，确认后才写入项目</small></div><div class="actions"><button class="small" data-clear-pending-materials>清空当前范围</button><button class="primary" data-upload-pending-materials>一并上传</button></div></div><div class="pending-grid">${previews}</div>`;
 }
 
 function queueMaterialFiles(files, pasted = false) {
@@ -145,13 +147,20 @@ function queueMaterialFiles(files, pasted = false) {
       error(Error(`${file.name || "该文件"} 的格式不支持`));
       continue;
     }
-    const key = `${file.name}:${file.size}:${file.lastModified}`;
+    const dossier = typeof dossierSession === "function" ? dossierSession().detail : "";
+    const competitor = (state.competitors || []).find((item) => item.id === dossier);
+    const key = `${projectId}:${currentVersion()?.id || ""}:${dossier}:${file.name}:${file.size}:${file.lastModified}`;
     if (pendingMaterialFiles.some((item) => item.key === key)) continue;
     pendingMaterialFiles.push({
       id: pendingMaterialId(),
       key,
       file,
       pasted,
+      project: projectId,
+      version: currentVersion()?.id || "",
+      competitorId: competitor?.id || "",
+      competitorTitle: competitor?.title || competitor?.app_id || "",
+      materialType: competitor ? ($("#dossier-upload-type")?.value || "attachment") : "",
       objectUrl: String(file.type || "").startsWith("image/") ? URL.createObjectURL(file) : "",
     });
     added += 1;
@@ -168,8 +177,9 @@ function removePendingMaterial(id) {
 }
 
 function clearPendingMaterials() {
-  pendingMaterialFiles.forEach((item) => item.objectUrl && URL.revokeObjectURL(item.objectUrl));
-  pendingMaterialFiles = [];
+  const current = (item) => !item.project || (item.project === projectId && item.version === (currentVersion()?.id || ""));
+  pendingMaterialFiles.filter(current).forEach((item) => item.objectUrl && URL.revokeObjectURL(item.objectUrl));
+  pendingMaterialFiles = pendingMaterialFiles.filter((item) => !current(item));
   renderPendingMaterials();
 }
 
@@ -184,7 +194,9 @@ function readFileAsBase64(file) {
 
 async function uploadPendingMaterials(button) {
   if (!pendingMaterialFiles.length) return;
-  const batch = [...pendingMaterialFiles];
+  const scopeProject = projectId, scopeVersion = currentVersion()?.id || "";
+  const batch = pendingMaterialFiles.filter((item) => !item.project || (item.project === scopeProject && item.version === scopeVersion));
+  if (!batch.length) return;
   const failed = [];
   let successful = 0;
   button.disabled = true;
@@ -193,8 +205,9 @@ async function uploadPendingMaterials(button) {
     try {
       const content = await readFileAsBase64(item.file);
       await api("/api/documents", {
-        project_id: projectId,
-        version_id: currentVersion()?.id || "",
+        project_id: item.project || scopeProject,
+        version_id: item.version ?? scopeVersion,
+        ...(item.competitorId ? {competitor_id:item.competitorId, material_type:item.materialType || "attachment"} : {}),
         name: item.file.name,
         content,
       });
@@ -206,7 +219,8 @@ async function uploadPendingMaterials(button) {
     }
     button.textContent = `正在上传 ${successful}/${batch.length}`;
   }
-  pendingMaterialFiles = failed;
+  const batchIds = new Set(batch.map((item) => item.id));
+  pendingMaterialFiles = [...pendingMaterialFiles.filter((item) => !batchIds.has(item.id)), ...failed];
   await refresh();
   toast(failed.length ? `已上传 ${successful} 份，${failed.length} 份失败并保留在暂存区` : `已上传 ${successful} 份资料`);
 }

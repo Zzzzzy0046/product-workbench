@@ -4,14 +4,27 @@
     {
       "id": "new-product",
       "name": "新品开发",
-      "description": "新品已经确定要做：F1 按 5 章分别生成和确认，再落到核心需求、可选埋点和开发验收。",
-      "prompt": "轻量推进，不设置机会门。F1 从品类用户到 PRD 交接逐章生成，确认后自动合并；不把版本简报和版本复盘作为新品前置步骤。",
+      "description": "按市场与竞品分析、原型图与需求说明、初审修改、终审整理和需求评审推进，可从当前工作阶段直接开始。",
+      "prompt": "新品已决定要做。先围绕本轮模块准备功能流程和页面状态，再交接外部原型制作与右侧中文需求旁注；按真实意见修订，终审整理后按需同步 PRD、埋点和产品验收用例。",
       "modes": ["fast"],
+      "stages": [
+        {"id": "analysis", "name": "市场与竞品分析", "description": "按现有资料完成新品分析，已有明确结论可直接进入后续工作。"},
+        {"id": "prototype", "name": "原型图＋需求说明", "description": "流程、页面状态和共享规则先收口，再交接外部原型制作与中文旁注。"},
+        {"id": "initial-review", "name": "初审修改", "description": "根据真实评审意见定位影响对象，给出逐条修订内容。"},
+        {"id": "final-review", "name": "终审整理", "description": "核对原型说明、旁注、共享规则和 PRD 的一致性，保留待人工确认项。"},
+        {"id": "handoff", "name": "需求评审", "description": "按需同步 PRD 和埋点，交付产品验收用例；有真实构建证据时再记录开发验收。"}
+      ],
       "steps": [
-        {"task": "fast/new-product-analysis"},
-        {"task": "fast/core-prd"},
-        {"task": "fast/tracking-spec", "optional": true},
-        {"task": "fast/acceptance"}
+        {"task": "fast/new-product-analysis", "stage": "analysis"},
+        {"task": "fast/shared-rules", "optional": true, "stage": "prototype"},
+        {"task": "fast/flow-pages", "optional": true, "stage": "prototype"},
+        {"task": "fast/prototype-handoff", "stage": "prototype"},
+        {"task": "fast/review-changes", "optional": true, "stage": "initial-review"},
+        {"task": "fast/consistency-review", "stage": "final-review"},
+        {"task": "fast/core-prd", "optional": true, "stage": "handoff"},
+        {"task": "fast/tracking-spec", "optional": true, "stage": "handoff"},
+        {"task": "fast/product-acceptance", "stage": "handoff"},
+        {"task": "fast/acceptance", "optional": true, "stage": "handoff"}
       ]
     },
     {

@@ -1,0 +1,99 @@
+{
+  "skill": "android-walkthrough",
+  "version": "1.0.1",
+  "selection": "Runtime source and generic protocol only; no run data or account configuration.",
+  "files": [
+    {
+      "path": "agents/openai.yaml",
+      "sha256": "0f02418e6045784fc768aaa6e96a5c52b201442d275d0388f0c3b99dee17d209"
+    },
+    {
+      "path": "README.md",
+      "sha256": "c69ef652952234f95d96c4beb38419fd27bc1592d4f3aa8ddedb80b77488996e"
+    },
+    {
+      "path": "references/ads.md",
+      "sha256": "2b8f71fa0bac9ccb429151b0b0e27fe5e4a4beb0197f9e89394275a173ec2d6d"
+    },
+    {
+      "path": "references/competitor-analysis.md",
+      "sha256": "28a9b8b24c9f3e58d153848e7bb230cf7984fce52354198c93f03c8155616cb1"
+    },
+    {
+      "path": "references/delivery.md",
+      "sha256": "b28c479e02b3afcdeadc1cfe28bd69107b0faa008bda1fa55df104b3732e1ce7"
+    },
+    {
+      "path": "references/json-contract.md",
+      "sha256": "bbfb46c5b1210088be94655b65a48062f7d2366bd80d707c6ae1b41a8ed0d76c"
+    },
+    {
+      "path": "references/walkthrough.md",
+      "sha256": "e84d5d87816c4171d8021b4f33ac672e16aa4ed4c1712297767c2fc66f3b92ec"
+    },
+    {
+      "path": "requirements.txt",
+      "sha256": "950c83f71d644fe0b8861bf9cd607a6ad945ebb85f50cdf7b673998d0c7a12db"
+    },
+    {
+      "path": "scripts/aw/__init__.py",
+      "sha256": "3b7ab1b7ece66c87f79a249a6709b707dfba527b3aaae6f9e3282002ce5b72ab"
+    },
+    {
+      "path": "scripts/aw/adb.py",
+      "sha256": "d1520cacfc7824ecc760b7594a8415258e3ed8d2556fa71681cb7c356fce05d5"
+    },
+    {
+      "path": "scripts/aw/cli.py",
+      "sha256": "36ce4d17d983f07c1460043299cbbd60a9f2d178e742c52b79a16a8f3cfee1cf"
+    },
+    {
+      "path": "scripts/aw/device.py",
+      "sha256": "6c2ed77d1dff0e2f19954ac5f6d21ea0fed18f0bfa92e69de24465803c44fd13"
+    },
+    {
+      "path": "scripts/aw/doctor.py",
+      "sha256": "8a3681d70103ebcfc86982f6c0ebe57bb18e81c10b4811255885f2311d9d5f5a"
+    },
+    {
+      "path": "scripts/aw/docx_export.py",
+      "sha256": "6d31dc5915d11328ba593b3231c566f918d8e3cc80ea1e49c8fab4dd7bcaa978"
+    },
+    {
+      "path": "scripts/aw/errors.py",
+      "sha256": "ad5e25d0f3d79b57fd24b47a3e8c30a78f6b35b9261e12cef7ef85fcd3c5108a"
+    },
+    {
+      "path": "scripts/aw/mapstore.py",
+      "sha256": "75810bd4b543fea452161ed97c0840b3ec2c300aed10784adccb1739db085a48"
+    },
+    {
+      "path": "scripts/aw/montage.py",
+      "sha256": "c695b64a13d567704f7684b9fecfea41cb3722d2a7c5964a358c3c1c35769686"
+    },
+    {
+      "path": "scripts/aw/review.py",
+      "sha256": "7620a4ee3a6407a0b77af2890020b9ebb37eae6ad677128c13fc06c9e303da70"
+    },
+    {
+      "path": "scripts/aw/session.py",
+      "sha256": "6132c86c3128001f39e0d16aa081ce7ec1c77a77348ea4edc5e429be12988174"
+    },
+    {
+      "path": "scripts/aw/ui.py",
+      "sha256": "6e92b7d3c1135386d3ba2259b4772ce88c91a6bfc4851ed0de5315f3a3b0f40f"
+    },
+    {
+      "path": "scripts/aw/workspace.py",
+      "sha256": "8a48b28711d088153ee5dab5b113401693841906db10ca50bfdb4e2a426e9617"
+    },
+    {
+      "path": "scripts/aw.py",
+      "sha256": "11138bea7d98f677d1f2869cc19cbcef3cf06c34c2ed0f2b6503aff07d445d83"
+    },
+    {
+      "path": "SKILL.md",
+      "sha256": "6d48e90761716e959aab59efcc45a7cbd26e0e04ff796ba21f6b76619c2b0e17"
+    }
+  ]
+}

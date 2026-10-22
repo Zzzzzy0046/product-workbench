@@ -4,7 +4,7 @@
 
 ## 本地产品工作台
 
-已提供可运行的单人工作台：创建项目、导入文档和截图、调用桌面竞品评论采集器、准备三类快速交付物、调用 Codex 生成、评审与修订，并导出中文 Markdown / Word / PDF / Excel / CSV 或完整项目包。
+已提供可运行的单人工作台：创建项目、导入文档和截图、调用桌面竞品评论采集器，按当前阶段调用 Codex 整理分析、原型需求与评审交接，支持编辑、批注和修订，并导出中文 Markdown / Word / PDF / Excel / CSV 或完整项目包。
 
 ```powershell
 .venv\Scripts\python.exe workbench\app.py
@@ -12,15 +12,23 @@
 
 启动后打开 `http://127.0.0.1:8765`。安装、使用方式、扩展机制和明确边界见 [工作台使用手册](workbench/README.md)。工作台已接入双索引 Hybrid RAG：当前项目资料独立索引，全局 Product KB 只读补充方法知识；不可用时自动回退关键词检索。
 
+资料页也可直接使用「Android 实机截图走查」：指定已安装 App 和范围，调用已有截图 skill 自动走查并按模块输出流程 PNG；遇到需人工处理的页面暂停，确认后再入库。使用方式与边界见 [实机截图功能说明](docs/WORKBENCH-ANDROID-CAPTURE.md)。
+
 ## 工作流使用手册
 
-日常新品默认走三段快速路径：F1 新品需求分析、F2 核心 PRD、F3 开发验收清单。F1 保留 Heart Rate 式完整产品分析结构，不再是简短定义卡；竞品评论 CSV、政策来源、技术日志、截图和研究资料作为证据附件进入资料索引，相关结论引用它们，不复制整份原始数据。流程不默认生成用户访谈、假设验证、风险清单、技术 Spike、Gate 或条件闭环。
+日常新品主干为“市场和竞品分析 → 原型图＋需求说明 → 初审修改 → 终审整理 → 需求评审”，从当前阶段继续，每轮明确范围与交付点。F1 保留五章分步生成与 Heart Rate 式完整分析；原型阶段准备公共规则、功能流程与页面状态、原型制作交接和中文需求旁注，实际原型在外部工具制作并回传。需求评审阶段按需补充独立 F2 PRD、完整埋点和 F3 开发实测清单，产品验收用例使用三列表。AI 自查和工作台确认不等于部门业务评审通过。
+
+竞品评论 CSV、政策来源、技术日志、截图和研究资料进入资料索引，相关结论引用它们，不复制整份原始数据。流程不默认生成用户访谈、假设验证、风险清单、技术 Spike、Gate 或条件闭环。
+
+本轮目标由用户输入决定，不预设固定回收周期、收益目标或放行门槛。已提供的经营指标仍可按本轮需要使用；既有项目资料和历史交付物保留原文，不自动重写。
 
 完整使用方式、资料规则和历史正式模式见：
 
 [《出海 C 端新品工作流使用手册》](docs/WORKFLOW-USER-MANUAL.md)
 
-正式模板位于 `knowledge/templates`。快速路径使用 `f1-new-product-analysis.md`、`f2-core-prd.md` 和 `f3-development-acceptance.md`。历史 T1–T4 仅在明确要求 0–12 章正式研究或大型跨团队材料时按文件路径使用，不参与默认 RAG 检索。
+正式模板位于 `knowledge/templates`。F1 与 F2 使用已有模板，新增按需模板为 `shared-rules.md`、`flow-pages.md`、`prototype-handoff.md`、`review-changes.md`、`consistency-review.md`、`product-acceptance.md`；`f3-development-acceptance.md` 保留开发实测用途。历史 T1–T4 仅在明确要求 0–12 章正式研究或大型跨团队材料时按文件路径使用，不参与默认 RAG 检索。
+
+本轮提炼依据、使用变化与原型执行边界见 [GBA 工作流更新说明](docs/WORKBENCH-GBA-WORKFLOW-UPDATE.md)。本仓库只保留可复用方法，不复制具体项目业务值与私有原型定位。
 
 ## 当前范围
 

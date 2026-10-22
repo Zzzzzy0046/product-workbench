@@ -8,9 +8,11 @@ document.addEventListener("click", async (e) => {
   try {
     if (b.dataset.project) {
       projectId = b.dataset.project;
+      if (androidCaptureModal) androidCaptureIsCurrent(androidCaptureModal);
       localStorage.setItem("workbench-project", projectId);
       tab = "overview";
       activeWorkflow = null;
+      activeWorkflowStage = null;
       await refresh();
     } else if (b.dataset.tab) {
       tab = b.dataset.tab;
@@ -42,6 +44,35 @@ document.addEventListener("click", async (e) => {
       lanhuConfigForm();
     } else if (b.dataset.action === "review-scrape") {
       reviewScrapeForm();
+    } else if (b.dataset.action === "competitor-discovery") {
+      openCompetitorDiscovery();
+    } else if (b.dataset.action === "android-capture") {
+      await openAndroidCapture();
+    } else if (b.dataset.androidCaptureSession) {
+      await openAndroidCapture(b.dataset.androidCaptureSession);
+    } else if (b.hasAttribute("data-android-capture-history-refresh")) {
+      await androidCaptureRenderHistory(true);
+    } else if (b.dataset.competitorAnalysis) {
+      const ids = b.dataset.competitorAnalysis.split(",").filter((id) => state.documents.some((item) => item.id === id));
+      if (!ids.length) throw Error("资料已更新，请刷新后重试。");
+      await prepareTask("fast/f1-category-user", {documentIds: ids});
+    } else if (b.dataset.confirmVisibleScrapes) {
+      const selectedProjectId = projectId;
+      const selectedVersionId = currentVersion()?.id || "";
+      const ids = b.dataset.confirmVisibleScrapes.split(",").filter((id) => (state.scrapes || []).some((item) => item.id === id && item.status === "ready" && item.collection_type === "competitor" && (item.version_id || "") === selectedVersionId));
+      b.disabled = true;
+      let completed = 0;
+      const failures = [];
+      for (const id of ids) {
+        if (projectId !== selectedProjectId || (currentVersion()?.id || "") !== selectedVersionId) break;
+        try {
+          await api(`/api/reviews/scrape/${encodeURIComponent(id)}/confirm`, {});
+          completed += 1;
+          b.textContent = `已确认 ${completed} / ${ids.length}…`;
+        } catch (err) { failures.push(err.message); }
+      }
+      await refresh();
+      toast(`已确认 ${completed} / ${ids.length} 份资料${failures.length ? `；${failures.length} 份失败，可单独重试。${failures[0]}` : completed < ids.length ? "；范围已切换，剩余未处理。" : "，可准备新品分析。"}`);
     } else if (b.dataset.previewScrape) {
       await competitorPreview(b.dataset.previewScrape);
     } else if (b.dataset.confirmScrape) {
@@ -65,13 +96,19 @@ document.addEventListener("click", async (e) => {
       productVersionForm(item);
     } else if (b.dataset.versionSelect) {
       setActiveVersion(b.dataset.versionSelect);
+      if (androidCaptureModal) androidCaptureIsCurrent(androidCaptureModal);
       draw();
       toast(`已切换到 ${currentVersion()?.name || "产品级工作"}`);
     } else if (b.dataset.workflow) {
       activeWorkflow = b.dataset.workflow;
+      activeWorkflowStage = null;
+      drawTasks();
+    } else if (b.dataset.workflowStage) {
+      activeWorkflowStage = b.dataset.workflowStage;
       drawTasks();
     } else if (b.hasAttribute("data-workflow-back")) {
       activeWorkflow = null;
+      activeWorkflowStage = null;
       drawTasks();
     } else if (b.dataset.pack) {
       b.disabled = true;
@@ -178,18 +215,18 @@ document.addEventListener("click", async (e) => {
     } else if (b.dataset.archiveJob) {
       b.disabled = true;
       const archived = b.dataset.archived === "true";
-      showJob(await api(`/api/jobs/${b.dataset.archiveJob}/archive`, { archived }));
+      const job = await api(`/api/jobs/${b.dataset.archiveJob}/archive`, { archived });
       await refresh();
+      showJob(job);
       toast(archived ? "任务已归档" : "任务已取消归档");
     } else if (b.dataset.review) {
       b.disabled = true;
-      showJob(
-        await api("/api/jobs/" + b.dataset.id + "/review", {
-          decision: b.dataset.review,
-          note: $("#review-note").value,
-        }),
-      );
+      const job = await api("/api/jobs/" + b.dataset.id + "/review", {
+        decision: b.dataset.review,
+        note: $("#review-note").value,
+      });
       await refresh();
+      showJob(job);
       toast("评审已保存");
     } else if (b.dataset.import) {
       const id = b.dataset.import;
@@ -221,6 +258,7 @@ document.addEventListener("click", async (e) => {
 document.addEventListener("change", (event) => {
   if (!event.target.matches(".active-version-select")) return;
   setActiveVersion(event.target.value);
+  if (androidCaptureModal) androidCaptureIsCurrent(androidCaptureModal);
   draw();
   toast(`已切换到 ${currentVersion()?.name || "产品级工作"}`);
 });

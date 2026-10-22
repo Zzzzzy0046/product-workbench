@@ -4,6 +4,39 @@ from workbench.core.runtime import *
 
 
 def dispatch_get(self, parsed, query):
+    if parsed.path.startswith('/api/android-capture/'):
+        service = self.app.android_capture
+        path = parsed.path.rstrip('/')
+        if path == '/api/android-capture/settings':
+            return self.respond(service.settings())
+        if path == '/api/android-capture/devices':
+            return self.respond(service.devices())
+        if path == '/api/android-capture/sessions':
+            return self.respond(service.sessions(query.get('project_id', [''])[0], query.get('version_id', [''])[0]))
+        parts = path.strip('/').split('/')
+        if len(parts) >= 4 and parts[2] == 'sessions':
+            session_id = parts[3]
+            if len(parts) == 4:
+                return self.respond(service.get(session_id))
+            if len(parts) == 5 and parts[4] == 'file':
+                file = service.file(session_id, query.get('path', [''])[0])
+                mime = {'.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.json': 'application/json; charset=utf-8', '.xml': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.jsonl': 'text/plain; charset=utf-8'}[file.suffix.lower()]
+                return self.respond(file.read_bytes(), content_type=mime)
+            if len(parts) == 5 and parts[4] == 'export':
+                content, filename = service.export(session_id)
+                return self.respond(content, content_type='application/zip', filename=filename)
+        return self.respond({'error': '未找到实机走查接口。'}, 404)
+    if parsed.path == "/api/competitors/revenue":
+        values = {key: value[0] for key, value in query.items() if value}
+        return self.respond(self.app.competitor_revenue.records(values.get("project_id", ""), values))
+    if parsed.path == "/api/competitors":
+        scope = query.get("version_id", [""])[0] if "version_id=" in parsed.query else None
+        return self.respond(self.app.competitor_service.list(query.get("project_id", [""])[0], scope))
+    if parsed.path.startswith("/api/competitors/"):
+        parts = parsed.path.strip("/").split("/")
+        if len(parts) == 3:
+            scope = query.get("version_id", [""])[0] if "version_id=" in parsed.query else None
+            return self.respond(self.app.competitor_service.detail(query.get("project_id", [""])[0], parts[2], scope))
     if parsed.path == "/api/state":
         return self.respond(self.app.state(query.get("project",[None])[0]))
     if parsed.path == "/api/search":
@@ -68,6 +101,22 @@ def dispatch_get(self, parsed, query):
 
 
 def dispatch_post(self, path, payload):
+    if path == '/api/android-capture/settings':
+        return self.respond(self.app.android_capture.save_settings(payload))
+    if path == '/api/android-capture/sessions':
+        return self.respond(self.app.android_capture.create(payload), 201)
+    if path.startswith('/api/android-capture/sessions/'):
+        parts = path.strip('/').split('/')
+        if len(parts) == 5:
+            session_id, action = parts[3:]
+            service = self.app.android_capture
+            if action in {'start', 'resume'}:
+                return self.respond(service.start(session_id, resume=action == 'resume'), 202)
+            if action == 'cancel':
+                return self.respond(service.cancel(session_id))
+            if action == 'confirm':
+                return self.respond(service.confirm(session_id))
+        return self.respond({'error': '未找到实机走查操作。'}, 404)
     if path == "/api/projects":
         return self.respond(self.app.create_project(payload.get("name",""),payload.get("brief",""),payload.get("workflow_mode","fast"),payload.get("platform",""),payload.get("team",""),payload.get("timebox","")),201)
     if path == "/api/project/update":
@@ -95,7 +144,7 @@ def dispatch_post(self, path, payload):
             db.execute("INSERT OR REPLACE INTO contexts VALUES(?,?,?)", (payload['project_id'],foundation,working))
         return self.respond({"ok":True})
     if path == "/api/documents":
-        return self.respond(self.app.add_document(payload["project_id"],payload["name"],base64.b64decode(payload["content"],validate=True),payload.get("version_id",""),"evidence",payload.get("category",""),payload.get("subcategory","")),201)
+        return self.respond(self.app.add_document(payload["project_id"],payload["name"],base64.b64decode(payload["content"],validate=True),payload.get("version_id",""),"evidence",payload.get("category",""),payload.get("subcategory",""),competitor_id=payload.get("competitor_id",""),material_type=payload.get("material_type","")),201)
     if path.startswith("/api/documents/"):
         parts = path.strip("/").split("/")
         if len(parts) == 4 and parts[3] == "category":
@@ -111,7 +160,7 @@ def dispatch_post(self, path, payload):
     if path == "/api/lanhu/snapshot":
         return self.respond(self.app.add_lanhu_snapshot(payload["project_id"],payload.get("url",""),payload.get("pages",[]),payload.get("version_id","")),201)
     if path == "/api/prepare":
-        return self.respond(self.app.prepare(payload["project_id"],payload["task"],payload.get("instruction",""),payload.get("document_ids",[]),payload.get("version_id","")),201)
+        return self.respond(self.app.prepare(payload["project_id"],payload["task"],payload.get("instruction",""),payload.get("document_ids",[]),payload.get("version_id",""),source_selection_mode=payload.get("source_selection_mode","auto"),competitor_ids=payload.get("competitor_ids",[])),201)
     if path == "/api/assemble":
         return self.respond(self.app.assemble_sections(payload["project_id"],payload.get("task","fast/new-product-analysis"),payload.get("version_id","")),201)
     if path == "/api/packs":
@@ -128,6 +177,25 @@ def dispatch_post(self, path, payload):
         return self.respond(self.app.start_review_scrape(payload["project_id"], payload), 202)
     if path == "/api/competitors/collect":
         return self.respond(self.app.start_competitor_collection(payload["project_id"], payload), 202)
+    if path == "/api/competitors":
+        return self.respond(self.app.competitor_service.upsert(payload["project_id"], payload), 201)
+    if path == "/api/competitors/inputs":
+        return self.respond(self.app.competitor_service.resolve_inputs(payload["project_id"], payload.get("version_id", ""), payload.get("competitor_ids", []), payload.get("document_ids", [])))
+    if path.startswith("/api/competitors/"):
+        parts = path.strip("/").split("/")
+        if len(parts) == 4 and parts[3] in {"update", "documents", "unlink"}:
+            service = self.app.competitor_service
+            if parts[3] == "update":
+                return self.respond(service.update(payload["project_id"], parts[2], payload))
+            if parts[3] == "documents":
+                return self.respond(service.attach_documents(payload["project_id"], parts[2], payload.get("document_ids", []), payload.get("material_type", "")))
+            return self.respond(service.unlink_documents(payload["project_id"], parts[2], payload.get("document_ids", [])))
+    if path == "/api/competitors/revenue":
+        return self.respond(self.app.competitor_revenue.save(payload["project_id"], payload), 201)
+    if path == "/api/competitors/search":
+        return self.respond(self.app.search_competitors(payload["project_id"], payload))
+    if path == "/api/competitors/detail":
+        return self.respond(self.app.competitor_detail(payload["project_id"], payload))
     if path.startswith("/api/reviews/scrape/"):
         parts = path.strip("/").split("/")
         if len(parts) == 5 and parts[4] == "cancel":

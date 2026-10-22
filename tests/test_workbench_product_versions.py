@@ -18,12 +18,20 @@ def test_fast_state_exposes_light_daily_workflows(tmp_path):
         ]
         new_product = state["workflows"][0]
         assert [step["task"] for step in new_product["steps"]] == [
-            "fast/new-product-analysis", "fast/core-prd", "fast/tracking-spec", "fast/acceptance",
+            "fast/new-product-analysis", "fast/shared-rules", "fast/flow-pages",
+            "fast/prototype-handoff", "fast/review-changes", "fast/consistency-review",
+            "fast/core-prd", "fast/tracking-spec", "fast/product-acceptance", "fast/acceptance",
         ]
         assert new_product["steps"][2]["optional"] is True
+        assert [stage["id"] for stage in new_product["stages"]] == [
+            "analysis", "prototype", "initial-review", "final-review", "handoff",
+        ]
+        assert new_product["steps"][3]["stage"] == "prototype"
+        assert new_product["steps"][8]["optional"] is False
+        assert new_product["steps"][9]["optional"] is True
         core_prd = bench.task("fast/core-prd")
         assert core_prd["recommended_upstream_any"] == [
-            "fast/new-product-analysis", "fast/version-brief",
+            "fast/prototype-handoff", "fast/flow-pages", "fast/new-product-analysis", "fast/version-brief",
         ]
     finally:
         bench.close()
@@ -124,7 +132,7 @@ def test_product_version_survives_project_copy_and_trash_restore(tmp_path):
         package, _ = bench.export_project(project["id"])
         with zipfile.ZipFile(io.BytesIO(package)) as archive:
             exported = json.loads(archive.read("data.json"))
-        assert exported["schema_version"] == 2
+        assert exported["schema_version"] == 3
         assert len(exported["product_versions"]) == 1
         assert len(exported["version_documents"]) == 2
         copied = bench.import_project(package)

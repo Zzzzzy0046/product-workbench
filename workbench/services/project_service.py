@@ -31,6 +31,8 @@ class ProjectService(BoundService):
                 "INSERT INTO projects(id,name,brief,created,workflow_mode,platform,team,timebox) VALUES(?,?,?,?,?,?,?,?)",
                 (project_id,name,brief,now(),workflow_mode,platform,team,timebox),
             )
+            db.execute("INSERT OR REPLACE INTO preferences(key,value) VALUES(?,?)", (
+                "migration:competitor-dossiers-v1:" + project_id, json.dumps({"completed": now()})))
         return self.project(project_id)
 
     def update_project(self, project_id, brief, workflow_mode=None, platform=None, team=None, timebox=None):
@@ -66,6 +68,10 @@ class ProjectService(BoundService):
                 raise ValueError("项目仍有生成任务运行中，请先停止任务再删除。")
             if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running')", (project_id,)):
                 raise ValueError("项目仍有评论采集任务运行中，请先停止采集再删除。")
+            capture_service = getattr(self._workbench, "android_capture", None)
+            has_active_capture = getattr(capture_service, "has_active", None)
+            if callable(has_active_capture) and has_active_capture(project_id):
+                raise ValueError("项目仍有 Android 截图走查运行中，请先暂停走查再删除。")
             job_ids = [row["id"] for row in self.rows("SELECT id FROM jobs WHERE project_id=?", (project_id,))]
             snapshot = {
                 "schema_version": 5,
@@ -75,6 +81,8 @@ class ProjectService(BoundService):
                 "context": self.rows("SELECT * FROM contexts WHERE project_id=?", (project_id,)),
                 "conditions": self.rows("SELECT * FROM conditions WHERE project_id=?", (project_id,)),
                 "documents": self.rows("SELECT * FROM documents WHERE project_id=?", (project_id,)),
+                "competitors": self.rows("SELECT * FROM competitors WHERE project_id=?", (project_id,)),
+                "competitor_documents": self.rows("SELECT d.* FROM competitor_documents d JOIN competitors c ON c.id=d.competitor_id WHERE c.project_id=?", (project_id,)),
                 "jobs": self.rows("SELECT * FROM jobs WHERE project_id=?", (project_id,)),
                 "reviews": self.rows(
                     "SELECT r.* FROM reviews r JOIN jobs j ON j.id=r.job_id WHERE j.project_id=?",
@@ -128,6 +136,8 @@ class ProjectService(BoundService):
                     db.execute("DELETE FROM job_versions WHERE job_id IN (SELECT id FROM jobs WHERE project_id=?)", (project_id,))
                     db.execute("DELETE FROM scrapes WHERE project_id=?", (project_id,))
                     db.execute("DELETE FROM version_documents WHERE version_id IN (SELECT id FROM product_versions WHERE project_id=?)", (project_id,))
+                    db.execute("DELETE FROM competitor_documents WHERE competitor_id IN (SELECT id FROM competitors WHERE project_id=?)", (project_id,))
+                    db.execute("DELETE FROM competitors WHERE project_id=?", (project_id,))
                     db.execute("DELETE FROM documents WHERE project_id=?", (project_id,))
                     db.execute("DELETE FROM conditions WHERE project_id=?", (project_id,))
                     db.execute("DELETE FROM contexts WHERE project_id=?", (project_id,))
@@ -196,6 +206,7 @@ class ProjectService(BoundService):
             if self.rows("SELECT id FROM projects WHERE id=?", (project_id,)):
                 raise ValueError("同一项目已经存在，不能重复恢复。")
             table_ids = {
+                "competitors": [item.get("id", "") for item in snapshot.get("competitors", [])],
                 "product_versions": [item.get("id", "") for item in snapshot.get("product_versions", [])],
                 "scrapes": [item.get("id", "") for item in snapshot.get("scrapes", [])],
                 "documents": [item.get("id", "") for item in snapshot.get("documents", [])],
@@ -252,6 +263,16 @@ class ProjectService(BoundService):
                             "INSERT INTO documents(id,project_id,name,text,sha,created,kind,category,subcategory) VALUES(?,?,?,?,?,?,?,?,?)",
                             (item["id"],project_id,item.get("name",""),item.get("text",""),item.get("sha",""),item.get("created",now()),item.get("kind","upload"),item.get("category") or infer_material_category(item.get("name",""),item.get("kind","upload")),item.get("subcategory") or infer_image_subcategory(item.get("name",""),item.get("category") or infer_material_category(item.get("name",""),item.get("kind","upload")))),
                         )
+                    for item in snapshot.get("competitors", []):
+                        db.execute("INSERT INTO competitors(id,project_id,platform,app_id,title,source_url,role,note,archived,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (
+                            item["id"],project_id,item["platform"],item["app_id"],item.get("title",item["app_id"]),item.get("source_url",""),item.get("role",""),item.get("note",""),int(bool(item.get("archived",0))),item.get("created",now()),item.get("updated",now())))
+                    restored_documents = {item["id"] for item in snapshot.get("documents", [])}
+                    restored_competitors = {item["id"] for item in snapshot.get("competitors", [])}
+                    for item in snapshot.get("competitor_documents", []):
+                        if item.get("competitor_id") not in restored_competitors or item.get("document_id") not in restored_documents:
+                            raise ValueError("回收记录中的竞品资料归属无效，未执行恢复。")
+                        db.execute("INSERT INTO competitor_documents(competitor_id,document_id,material_type,source_type,source_id,captured_at,metadata) VALUES(?,?,?,?,?,?,?)", (
+                            item["competitor_id"],item["document_id"],item.get("material_type","attachment"),item.get("source_type","manual"),item.get("source_id",""),item.get("captured_at",""),item.get("metadata","{}")))
                     for item in snapshot.get("jobs", []):
                         db.execute(
                             """INSERT INTO jobs(id,project_id,task_id,title,status,created,updated,prompt,sources,output,error,workflow_mode,parent_job_id,revision_number,revision_reason,source_version,archived,version_id)
@@ -290,6 +311,11 @@ class ProjectService(BoundService):
                         source.parent.mkdir(parents=True,exist_ok=True)
                         shutil.move(str(destination),str(source))
                 raise
+        if "competitors" not in snapshot:
+            self.competitor_service.migrate_project(project_id)
+        else:
+            with self.db() as db:
+                db.execute("INSERT OR REPLACE INTO preferences(key,value) VALUES(?,?)", (self.competitor_service.MIGRATION + ":" + project_id, json.dumps({"completed": now()})))
         return self.project(project_id)
 
     def permanently_delete_trash(self, trash_id, confirmation):

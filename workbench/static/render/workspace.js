@@ -66,7 +66,7 @@ function drawOverview() {
   const docs = state.documents,
     jobs = state.jobs;
   $("#view").innerHTML =
-    `<div class="grid"><div class="card hero"><div class="eyebrow">这次，要完成什么？</div><h2>一次推进一项工作，<br>留下可以继续用的成果。</h2><p>${state.project.workflow_mode === "fast" ? "新品默认按新品分析 → 核心 PRD → 可选埋点 → 开发验收推进；版本迭代、竞品分析和版本复盘按需进入。证据附件保留在资料索引，正文只引用相关结论。" : "完整模式保留完整研究深度和条件管理。"}</p><button data-tab="tasks">选择工作流 →</button></div><div class="card"><h3>当前工作</h3><p>${E(state.context.working || "还没有记录当前目标。可以写下这周要解决的问题、已确定的方向和暂时不做的事。")}</p><button class="small" data-tab="context">维护项目上下文</button><div class="help">已确认交付物会自动进入检索；草稿只有被你显式勾选时才进入下游任务，并附带醒目警告。</div></div></div><div class="stats"><div class="stat"><b>${docs.filter((d) => d.kind === "upload").length}</b><span>已导入资料</span></div><div class="stat"><b>${jobs.filter((j) => !j.archived && (j.status === "completed" || j.review_decision === "accepted")).length}</b><span>已完成任务</span></div><div class="stat"><b>${docs.filter((d) => d.kind === "accepted").length}</b><span>已确认交付物</span></div></div><div class="section-title"><h2>最近的工作</h2><button class="small" data-tab="outputs">全部记录</button></div><div class="card">${jobRows(jobs.filter((j) => !j.archived).slice(0, 4))}</div>`;
+    `<div class="grid"><div class="card hero"><div class="eyebrow">这次，要完成什么？</div><h2>一次推进一项工作，<br>留下可以继续用的成果。</h2><p>${state.project.workflow_mode === "fast" ? "按当前阶段进入：市场竞品、原型与说明、初审修改、终审整理或需求评审。已有原型和文档可以直接接着做；规则、流程、PRD 和验收用例按本轮需要准备。" : "完整模式保留完整研究深度和条件管理。"}</p><button data-tab="tasks">选择工作流 →</button></div><div class="card"><h3>当前工作</h3><p>${E(state.context.working || "还没有记录当前目标。可以写下这周要解决的问题、已确定的方向和暂时不做的事。")}</p><button class="small" data-tab="context">维护项目上下文</button><div class="help">下游任务优先使用当前范围内最新已确认的交付物。已有新版待确认时，旧稿不会自动替它做决定。</div></div></div><div class="stats"><div class="stat"><b>${docs.filter((d) => d.kind === "upload").length}</b><span>已导入资料</span></div><div class="stat"><b>${jobs.filter((j) => !j.archived && (j.status === "completed" || j.review_decision === "accepted")).length}</b><span>已完成任务</span></div><div class="stat"><b>${docs.filter((d) => d.kind === "accepted").length}</b><span>已确认交付物</span></div></div><div class="section-title"><h2>最近的工作</h2><button class="small" data-tab="outputs">全部记录</button></div><div class="card">${jobRows(jobs.filter((j) => !j.archived).slice(0, 4))}</div>`;
 }
 
 function drawContext() {
@@ -109,9 +109,18 @@ function drawConditions() {
 }
 
 function drawMaterials() {
+  return drawCompetitorDossiers();
+}
+
+function drawCommonProjectMaterials(target = "#project-public-materials") {
+  const documents = dossierCommonDocuments();
+  const selection = dossierSession().publicSelected;
   const scraper = state.integrations?.review_scraper || {};
-  const scrapes = state.scrapes || [];
-  const scrapeRows = scrapes.slice(0, 12).map((item) => {
+  const scopeVersionId = currentVersion()?.id || "";
+  const scrapes = (state.scrapes || []).filter((item) => (item.version_id || "") === scopeVersionId);
+  const visibleScrapes = scrapes.slice(0, 12);
+  const readyScrapeIds = visibleScrapes.filter((item) => item.collection_type === "competitor" && item.status === "ready").map((item) => item.id);
+  const scrapeRows = visibleScrapes.map((item) => {
     let request = {};
     try { request = JSON.parse(item.request || "{}"); } catch (_) { request = {}; }
     const platform = item.platform === "app_store" ? "App Store" : "Google Play";
@@ -131,10 +140,10 @@ function drawMaterials() {
     ].filter(Boolean).join(" · ");
     return `<div class="row"><div class="row-main"><h3>${E(title)}</h3><p>${E(facts)}</p>${item.error ? `<small class="scrape-error">${E(item.error)}</small>` : ""}</div><span class="tag ${statusClass}">${E(scrapeStatusNames[item.status] || item.status)}</span>${item.collection_type === "competitor" && ["ready", "completed"].includes(item.status) ? `<button class="small" data-preview-scrape="${E(item.id)}">预览资料</button>` : ""}${item.status === "ready" ? `<button class="primary small" data-confirm-scrape="${E(item.id)}">确认入库</button>` : ""}${item.result_doc_id ? `<button class="small" data-document="${E(item.result_doc_id)}">查看主资料</button>` : ""}${["failed", "empty", "cancelled"].includes(item.status) ? `<button class="small" data-retry-scrape="${E(item.id)}">重试</button>` : ""}${["queued", "running"].includes(item.status) ? `<button class="small" data-cancel-scrape="${E(item.id)}">取消</button>` : ""}</div>`;
   }).join("") || '<div class="empty compact">还没有竞品资料采集记录。</div>';
-  const images = imageDocuments();
+  const images = imageDocuments().filter((document) => documents.some((item) => item.id === document.id));
   const activeScrape = scrapes.some((item) => ["queued", "running"].includes(item.status));
   const categoryCounts = Object.fromEntries(materialCategories.map((item) => [item.id, 0]));
-  state.documents.forEach((document) => {
+  documents.forEach((document) => {
     const category = categoryCounts[document.category] === undefined ? "other" : document.category;
     categoryCounts[category] += 1;
   });
@@ -152,7 +161,7 @@ function drawMaterials() {
       .map((item) => `<button type="button" data-image-subcategory-filter="${item.id}" aria-pressed="${activeImageSubcategory === item.id}">${E(item.label)} <span>${imageSubcategoryCounts[item.id]}</span></button>`),
   ].join("");
   const categoryFilters = [
-    `<button type="button" data-material-filter="all" aria-pressed="${activeMaterialCategory === "all"}">全部 <span>${state.documents.length}</span></button>`,
+    `<button type="button" data-material-filter="all" aria-pressed="${activeMaterialCategory === "all"}">全部 <span>${documents.length}</span></button>`,
     ...materialCategories
       .filter((item) => categoryCounts[item.id])
       .map((item) => `<button type="button" data-material-filter="${item.id}" aria-pressed="${activeMaterialCategory === item.id}">${E(item.label)} <span>${categoryCounts[item.id]}</span></button>`),
@@ -162,25 +171,29 @@ function drawMaterials() {
     const category = categoryCounts[d.category] === undefined ? "other" : d.category;
     const subcategory = imageSubcategoryCounts[d.subcategory] === undefined ? "other" : d.subcategory;
     const attributes = `data-material-item data-material-category="${E(category)}" data-material-subcategory="${E(subcategory)}" data-material-name="${E(d.name)}"`;
+    const ownershipCheck = `<label class="public-material-select"><input type="checkbox" data-dossier-public-select="${E(d.id)}" aria-label="选择 ${E(d.name)} 以归入竞品档案" ${selection.has(d.id) ? "checked" : ""} ${dossierDocumentReady(d) ? "" : "disabled"}><span>归档</span></label>`;
     if (isImage) {
-      return `<article class="material-image-card" ${attributes}><button class="material-image-preview" data-document="${E(d.id)}" aria-label="查看 ${E(d.name)}"><img src="/api/assets/${encodeURIComponent(projectId)}/${encodeURIComponent(d.id)}" alt="${E(d.name)}"></button><div class="material-image-info"><h4 title="${E(d.name)}">${E(d.name)}</h4><p>${date(d.created)}</p><div class="material-item-actions">${materialImageSubcategoryOptions(d)}<button class="small" data-document="${E(d.id)}">查看</button><button class="danger small" data-delete-image="${E(d.id)}">删除</button></div></div></article>`;
+      return `<article class="material-image-card" ${attributes}>${ownershipCheck}<button class="material-image-preview" data-document="${E(d.id)}" aria-label="查看 ${E(d.name)}"><img src="/api/assets/${encodeURIComponent(projectId)}/${encodeURIComponent(d.id)}" alt="${E(d.name)}" loading="lazy"></button><div class="material-image-info"><h4 title="${E(d.name)}">${E(d.name)}</h4><p>${date(d.created)}</p><div class="material-item-actions">${materialImageSubcategoryOptions(d)}<button class="small" data-document="${E(d.id)}">查看</button><button class="danger small" data-delete-image="${E(d.id)}">删除</button></div></div></article>`;
     }
-    return `<article class="row material-library-item" ${attributes}><div class="row-main material-row"><div><h3>${E(d.name)}</h3><p>${E(kinds[d.kind])} · ${d.characters.toLocaleString()} 字符 · ${date(d.created)}</p></div></div><div class="material-item-actions">${materialCategoryOptions(d)}<button class="small" data-document="${E(d.id)}">读原文</button></div></article>`;
+    return `<article class="row material-library-item" ${attributes}>${ownershipCheck}<div class="row-main material-row"><div><h3>${E(d.name)}</h3><p>${E(kinds[d.kind])} · ${Number(d.characters || 0).toLocaleString()} 字符 · ${date(d.created)}</p></div></div><div class="material-item-actions">${materialCategoryOptions(d)}<button class="small" data-document="${E(d.id)}">读原文</button></div></article>`;
   };
   const materialGroups = materialCategories.map((category) => {
-    const documents = state.documents.filter((document) => (categoryCounts[document.category] === undefined ? "other" : document.category) === category.id);
-    if (!documents.length) return "";
-    const items = documents.map(materialRow).join("");
+    const categoryDocuments = documents.filter((document) => (categoryCounts[document.category] === undefined ? "other" : document.category) === category.id);
+    if (!categoryDocuments.length) return "";
+    const items = categoryDocuments.map(materialRow).join("");
     const bodyClass = category.id === "images" ? "material-image-grid" : "materials-list card";
     const secondaryFilters = category.id === "images" ? `<div class="image-subcategory-filters" role="group" aria-label="图片分类">${imageSubcategoryFilters}</div>` : "";
-    return `<section class="material-category-group" data-material-group="${category.id}"><div class="material-category-heading"><div><h3>${E(category.label)}</h3><p data-material-group-count>${documents.length} 份资料</p></div></div>${secondaryFilters}<div class="${bodyClass}">${items}</div></section>`;
+    return `<section class="material-category-group" data-material-group="${category.id}"><div class="material-category-heading"><div><h3>${E(category.label)}</h3><p data-material-group-count>${categoryDocuments.length} 份资料</p></div></div>${secondaryFilters}<div class="${bodyClass}">${items}</div></section>`;
   }).join("");
-  $("#view").innerHTML =
-    `<div class="section-title"><div><h2>项目资料</h2><p class="muted">截图、评论 CSV、政策、日志和研究资料统一放在这里，生成文档时按需引用。</p></div><a class="button-link" href="/api/projects/${encodeURIComponent(projectId)}/export">导出完整项目</a></div>
-    <div class="version-scope-card"><span>新资料默认归属</span>${activeVersionSelect()}<button class="small" data-tab="versions">管理版本</button></div>
-    <section class="material-intake" aria-labelledby="material-intake-title"><div class="section-title"><div><h2 id="material-intake-title">添加资料</h2><p class="muted">连续粘贴或选择多份资料，检查无误后再一次上传。</p></div></div><div id="material-paste-zone" class="paste-zone" tabindex="0" role="button" aria-label="粘贴、拖入或选择项目资料"><div class="paste-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><span>＋</span><kbd>V</kbd></div><strong>截图后直接粘贴到这里</strong><p>可连续粘贴多张；也可拖入文件，或点击选择。</p><button id="pick-materials" class="small" type="button">选择文件</button><input class="visually-hidden" type="file" id="upload" multiple accept=".md,.txt,.csv,.json,.pdf,.docx,.png,.jpg,.jpeg,.webp" aria-label="选择要导入的资料"><small>暂存内容只留在当前页面，点击“一并上传”后才写入项目。单份最大 12 MB，一批最多 30 份。</small></div><div id="pending-materials" aria-live="polite"></div></section>
-    <div class="section-title material-directory-title"><div><h2>资料库</h2><p class="muted">${state.documents.length} 份资料${images.length ? ` · ${images.length} 张项目图片` : ""}</p></div></div><section id="material-library" class="material-library"><div class="material-library-toolbar"><label class="material-search"><span class="visually-hidden">搜索资料名称</span><input id="material-search" type="search" placeholder="搜索资料名称" value="${E(materialSearchQuery)}"></label><div class="material-filter-status" id="material-filter-status" aria-live="polite"></div></div><div class="material-category-filters" role="group" aria-label="资料分类">${categoryFilters}</div><div class="material-category-groups">${materialGroups}</div><div id="material-filter-empty" class="empty compact" hidden>没有符合条件的资料。可以换一个分类或清空搜索词。</div>${state.documents.length ? "" : '<div class="empty compact">还没有资料。可直接粘贴截图，或选择文件加入。</div>'}</section>
-    <div class="material-tools"><div class="section-title"><div><h2>按需工具</h2><p class="muted">不影响日常添加和查看资料，需要时再展开。</p></div></div><details class="material-tool" ${activeScrape ? "open" : ""}><summary><span><strong>竞品资料采集</strong><small>从已确认的商店链接采集描述、截图和评论</small></span><span class="details-hint" aria-hidden="true"></span></summary><div class="material-tool-body"><div class="section-title"><p class="muted">工作台不会自动选择竞品。粘贴你确认的 Google Play / App Store 链接后再采集。</p><button class="primary small" data-action="review-scrape">${scraper.ready ? "批量采集" : "配置并采集"}</button></div><p class="help">${E(scraper.message || "正在检测桌面竞品评论工具")} ${scraper.root ? `· 当前目录：${E(scraper.root)}` : ""} · 采集完成后需确认才会进入项目资料</p><div class="scrape-list">${scrapeRows}</div></div></details><details class="material-tool"><summary><span><strong>查找资料依据</strong><small>在项目资料和知识库中查找可核对的原文片段</small></span><span class="details-hint" aria-hidden="true"></span></summary><div class="material-tool-body"><div class="searchbar"><input id="search-query" placeholder="例如：竞品差异、权限要求" aria-label="检索关键词"><button id="search">查找</button></div><p class="tool-note">只返回相关片段供你核对，不会自动改文档或把检索结果当成事实。</p><div id="search-results"></div></div></details></div>`;
+  const commonMarkup =
+    `<div class="section-title public-materials-heading"><div><h3>项目公共资料</h3><p class="muted">${documents.length} 份资料${images.length ? ` · ${images.length} 张图片` : ""} · 未指定竞品的研究、榜单和产品资料都在这里。</p></div><button class="small" data-dossier-public-attach ${selection.size ? "" : "disabled"}>归入竞品档案（${selection.size}）</button></div>
+    <section class="material-intake public-material-intake" aria-labelledby="material-intake-title"><div class="section-title"><div><h4 id="material-intake-title">补充公共资料</h4><p class="muted">上传到当前${currentVersion() ? `版本：${E(currentVersion().name || "当前版本")}` : "产品级范围"}。属于某个竞品的资料，请打开它的档案再添加。</p></div></div><div id="material-paste-zone" class="paste-zone" tabindex="0" role="button" aria-label="粘贴、拖入或选择项目公共资料"><div class="paste-shortcut" aria-hidden="true"><kbd>Ctrl</kbd><span>＋</span><kbd>V</kbd></div><strong>截图后直接粘贴到这里</strong><p>可连续粘贴多张；也可拖入文件，或点击选择。</p><button id="pick-materials" class="small" type="button">选择文件</button><input class="visually-hidden" type="file" id="upload" multiple accept=".md,.txt,.csv,.json,.pdf,.docx,.png,.jpg,.jpeg,.webp" aria-label="选择要导入的资料"><small>点击“一并上传”后才写入项目。单份最大 12 MB，一批最多 30 份。</small></div><div id="pending-materials" aria-live="polite"></div></section>
+    <section id="material-library" class="material-library"><div class="material-library-toolbar"><label class="material-search"><span class="visually-hidden">搜索资料名称</span><input id="material-search" type="search" placeholder="搜索公共资料名称" value="${E(materialSearchQuery)}"></label><div class="material-filter-status" id="material-filter-status" aria-live="polite"></div></div><div class="material-category-filters" role="group" aria-label="资料分类">${categoryFilters}</div><div class="material-category-groups">${materialGroups}</div><div id="material-filter-empty" class="empty compact" hidden>没有符合条件的资料。可以换一个分类或清空搜索词。</div>${documents.length ? "" : '<div class="empty compact">还没有公共资料。可直接粘贴截图，或选择文件加入。</div>'}</section>`;
+  const toolsMarkup = `<div class="material-tools public-material-tools"><details class="material-tool" ${activeScrape || readyScrapeIds.length ? "open" : ""}><summary><span><strong>竞品资料采集记录</strong><small>当前版本范围 · 最近 12 条 · 预览后确认入库</small></span><span class="details-hint" aria-hidden="true"></span></summary><div class="material-tool-body"><p class="help">${E(scraper.message || "正在检测桌面竞品评论工具")} · 采集完成后需确认才会进入分析输入；范围由你逐项勾选。</p>${readyScrapeIds.length ? `<div class="discovery-collection-actions"><button class="small" data-confirm-visible-scrapes="${E(readyScrapeIds.join(","))}">确认本页 ${readyScrapeIds.length} 份已就绪资料</button><small>先逐条预览；不会包含其他版本或本页未显示记录。</small></div>` : ""}<div class="scrape-list">${scrapeRows}</div></div></details>
+    <details class="material-tool android-capture-history"><summary><span><strong>实机走查记录</strong><small>当前版本范围 · 查看进度、接管续跑与模块拼图</small></span><span class="details-hint" aria-hidden="true"></span></summary><div class="material-tool-body"><div class="actions"><button class="small" data-android-capture-history-refresh>刷新走查记录</button></div><div id="android-capture-history" aria-live="polite"></div></div></details>
+    <details class="material-tool"><summary><span><strong>查找资料依据</strong><small>在项目资料和知识库中查找可核对的原文片段</small></span><span class="details-hint" aria-hidden="true"></span></summary><div class="material-tool-body"><div class="searchbar"><input id="search-query" placeholder="例如：竞品差异、权限要求" aria-label="检索关键词"><button id="search">查找</button></div><p class="tool-note">只返回相关片段供你核对，不会自动改文档或把检索结果当成事实。</p><div id="search-results"></div></div></details></div>`;
+  $(target).innerHTML = commonMarkup;
+  $("#project-material-tools").innerHTML = toolsMarkup;
   $("#upload").onchange = upload;
   const pasteZone = $("#material-paste-zone");
   $("#pick-materials").onclick = () => $("#upload").click();
@@ -259,6 +272,7 @@ function drawMaterials() {
     };
   });
   filterMaterialLibrary();
+  androidCaptureRenderHistory();
   $("#search").onclick = search;
   $("#search-query").onkeydown = (e) => {
     if (e.key === "Enter") search();
@@ -277,12 +291,19 @@ function drawTasks() {
   const scope = `<div class="version-scope-card"><span>本次任务归属</span>${activeVersionSelect()}<button class="small" data-tab="versions">管理版本</button></div>`;
   const mismatch = state.mode_mismatch_count ? `<div class="banner">当前项目是“${E(workflowNames[state.project.workflow_mode])}”，历史任务可能由另一模式生成。下面只显示当前模式可新建的任务。</div>` : "";
   if (workflow) {
-    const steps = workflow.steps.map((step, index) => {
+    const stages = workflow.stages || [];
+    if (!stages.some((stage) => stage.id === activeWorkflowStage)) activeWorkflowStage = stages[0]?.id || null;
+    const selectedStage = stages.find((stage) => stage.id === activeWorkflowStage);
+    const visibleSteps = selectedStage ? workflow.steps.filter((step) => step.stage === selectedStage.id) : workflow.steps;
+    const stageNavigation = stages.length ? `<nav class="workflow-stage-nav" aria-label="工作阶段">${stages.map((stage, index) => {
+      const stageSteps = workflow.steps.filter((step) => step.stage === stage.id);
+      const confirmed = stageSteps.filter((step) => taskIsCurrentConfirmed(step.task)).length;
+      return `<button class="workflow-stage-tab ${stage.id === activeWorkflowStage ? "selected" : ""}" data-workflow-stage="${E(stage.id)}" aria-current="${stage.id === activeWorkflowStage ? "step" : "false"}"><span class="stage-number">${index + 1}</span><span><strong>${E(stage.name)}</strong><small>${confirmed ? `${confirmed} 项资料已确认` : "可直接进入"}</small></span></button>`;
+    }).join("")}</nav><div class="workflow-stage-intro"><h3>${E(selectedStage?.name || "")}</h3><p>${E(selectedStage?.description || "")}</p></div>` : "";
+    const steps = visibleSteps.map((step, index) => {
       const task = allTasks.find((item) => item.key === step.task);
       if (task?.assembly === "accepted_sections" && task.section_tasks?.length) {
-        const scopedJobs = (taskKey) => state.jobs
-          .filter((job) => !job.archived && job.task_id === taskKey && (active ? job.version_id === active.id : !job.version_id))
-          .sort((left, right) => Date.parse(right.updated || right.created || 0) - Date.parse(left.updated || left.created || 0));
+        const scopedJobs = (taskKey) => scopedTaskJobs(taskKey);
         const chapterRows = task.section_tasks.map((taskKey, chapterIndex) => {
           const chapter = allTasks.find((item) => item.key === taskKey);
           const job = scopedJobs(taskKey)[0];
@@ -299,19 +320,20 @@ function drawTasks() {
         const latestChapterTime = Math.max(0, ...chapterJobs.map((job) => Date.parse(job?.review_created || job?.updated || job?.created || 0) || 0));
         const finalTime = Date.parse(finalJob?.created || 0) || 0;
         const stale = Boolean(finalJob && latestChapterTime > finalTime);
-        const done = finalJob?.review_decision === "accepted" && !stale;
+        const done = taskIsCurrentConfirmed(step.task);
         const finalStatus = done ? "完整 F1 已确认" : stale ? "章节已更新，需重新合并" : finalJob ? "完整 F1 待检查" : allAccepted ? "5 章已确认，可合并" : "按顺序完成各章";
         const finalActions = `${finalJob ? `<button class="small" data-job="${E(finalJob.id)}">查看完整 F1</button>` : ""}${allAccepted && (!done || stale) ? `<button class="primary small" data-f1-assemble="${E(step.task)}">${finalJob ? "重新合并" : "合并完整 F1"}</button>` : ""}`;
         return `<article class="workflow-step f1-workflow-group ${done ? "done" : ""}"><div class="step-index">${String(index + 1).padStart(2, "0")}</div><div class="row-main"><div class="chipline"><h3>${E(step.name)}</h3>${done ? '<span class="tag">当前范围已确认</span>' : ""}</div><p>分 5 章逐步生成、编辑和确认；后一章只使用已确认的前文。</p><div class="f1-chapter-list">${chapterRows}</div><div class="f1-assembly"><div><strong>${E(finalStatus)}</strong><small>合并只统一来源编号和章节顺序，不调用模型重写正文。</small></div><div class="actions">${finalActions}</div></div></div></article>`;
       }
-      const done = state.jobs.some((job) => job.task_id === step.task && job.review_decision === "accepted" && (active ? job.version_id === active.id : !job.version_id));
-      return `<article class="workflow-step ${done ? "done" : ""}"><div class="step-index">${String(index + 1).padStart(2, "0")}</div><div class="row-main"><div class="chipline"><h3>${E(step.name)}</h3>${step.optional ? '<span class="tag">可选</span>' : ""}${done ? '<span class="tag">当前范围已确认</span>' : ""}</div><p>${E(step.description)}</p></div><button class="primary small" data-task="${E(step.task)}" ${task ? "" : "disabled"}>准备任务</button></article>`;
+      const done = taskIsCurrentConfirmed(step.task);
+      const latest = scopedTaskJobs(step.task)[0];
+      return `<article class="workflow-step ${done ? "done" : ""}"><div class="step-index">${String(index + 1).padStart(2, "0")}</div><div class="row-main"><div class="chipline"><h3>${E(step.name)}</h3>${step.optional ? '<span class="tag">按需</span>' : ""}${done ? '<span class="tag">当前资料已确认</span>' : ""}</div><p>${E(step.description)}</p></div><div class="workflow-step-actions">${latest ? `<button class="small" data-job="${E(latest.id)}">查看当前稿</button>` : ""}<button class="primary small" data-task="${E(step.task)}" ${task ? "" : "disabled"}>${latest ? "准备新版" : "准备任务"}</button></div></article>`;
     }).join("");
-    $("#view").innerHTML = `${mismatch}${scope}<div class="section-title"><div><button class="small" data-workflow-back>← 返回全部工作流</button><h2>${E(workflow.name)}</h2><p class="muted">${E(workflow.prompt)}</p></div><span class="tag">${active ? E(active.name) : "产品级"}</span></div><div class="workflow-steps">${steps}</div><div class="help">F1 内部按章节逐步确认；F1、F2、可选埋点和 F3 仍是独立交付物。可选步骤可以跳过。</div>`;
+    $("#view").innerHTML = `${mismatch}${scope}<div class="section-title"><div><button class="small" data-workflow-back>← 返回全部工作流</button><h2>${E(workflow.name)}</h2><p class="muted">${E(workflow.prompt)}</p></div><span class="tag">${active ? E(active.name) : "产品级"}</span></div>${stageNavigation}<div class="workflow-steps">${steps}</div><div class="help">${stages.length ? "已有原型、PRD 或评审意见时，可直接选择对应阶段。资料确认用于后续任务引用，实际初审、终审和需求评审结论仍以评审人的决定为准。" : "按本轮目标选择任务；按需项可以跳过，已有资料可直接作为本轮输入。"}</div>`;
     return;
   }
   activeWorkflow = null;
-  const workflowCards = workflows.map((item) => `<article class="card workflow-card"><div class="eyebrow">WORKFLOW</div><h3>${E(item.name)}</h3><p>${E(item.description)}</p><div class="workflow-preview">${item.steps.map((step) => `<span>${E(step.name)}${step.optional && !step.name.includes("可选") ? "（可选）" : ""}</span>`).join("<b>→</b>")}</div><button class="primary" data-workflow="${E(item.id)}">进入工作流 →</button></article>`).join("");
+  const workflowCards = workflows.map((item) => `<article class="card workflow-card"><div class="eyebrow">WORKFLOW</div><h3>${E(item.name)}</h3><p>${E(item.description)}</p><div class="workflow-preview">${(item.stages?.length ? item.stages : item.steps).map((step) => `<span>${E(step.name)}${step.optional && !step.name.includes("可选") ? "（可选）" : ""}</span>`).join("<b>→</b>")}</div><button class="primary" data-workflow="${E(item.id)}">进入工作流 →</button></article>`).join("");
   const taskCards = tasks.map((task) => `<article class="card task-card compact-task"><h3>${E(task.name)}</h3><p>${E(task.description)}</p><footer><span>中文 Markdown</span><button class="small" data-task="${E(task.key)}">单独准备</button></footer></article>`).join("");
   $("#view").innerHTML = `${mismatch}${scope}<div class="section-title"><div><h2>选择工作流</h2><p class="muted">按你现在要做的事进入；新品、版本、竞品和复盘互不强制串联。</p></div></div><div class="grid workflow-grid">${workflowCards || '<div class="empty">当前模式没有预设工作流，请直接选择单项任务。</div>'}</div><details class="standalone-tasks"><summary>也可以直接选择单项交付物</summary><div class="grid">${taskCards}</div></details><div class="help">先生成可检查的任务包；确认资料、模板和目标后再启动模型。产品版本是可选归类，不会阻止你直接开始。</div>`;
 }
@@ -336,4 +358,9 @@ function drawCapabilities() {
     lanhu = state.integrations?.lanhu || {};
   $("#content").innerHTML =
     `<div class="heading"><div><div class="eyebrow">CAPABILITY LIBRARY</div><h1>让工作台随工作生长。</h1><p>启用能力后，项目中会出现对应任务。任务、资料和交付物仍使用同一套工作方式。</p></div><button data-tab="overview">返回项目</button></div><div class="grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag">${p.enabled ? "已启用" : "可启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.filter((t) => !t.hidden || t.assembly).map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用此能力" : "启用此能力"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="card">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.status === "manual" ? "warn" : ""}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}</div><div class="section-title"><h2>Lanhu MCP</h2></div><div class="card"><div class="row"><div class="row-main"><h3>蓝湖原型读取</h3><p>${E(lanhu.message || "尚未检测")}</p><p class="muted">配置来源：${E(lanhu.source || "本机 Codex 配置")} · 认证值不会显示或写入工作台。</p></div><span class="tag ${lanhu.ready ? "" : "warn"}">${lanhu.ready ? "配置可用" : "需要配置"}</span></div><div class="actions"><button class="primary small" data-action="lanhu-config">配置 / 重新检测</button><span class="help">未安装时请先安装 Node.js，再运行 npx -y mcp-lanhu；也可以继续上传截图或 PRD。</span></div></div><div class="section-title"><h2>运行环境</h2></div><div class="card"><p>生成模型：<span class="mono">${E(state.runtime.model)}</span></p><p>知识来源：${state.runtime.knowledge_count} 份已启用方法、模板与案例。</p><p>检索方式：${E(state.runtime.retrieval)}。</p><p>全局知识索引：${state.runtime.global_index ? `${globalStats.sources || 0} 个来源 / ${globalStats.chunks || 0} 个片段` : "未建立或当前不可用"}</p><p>项目隔离索引：${state.runtime.project_index ? `${projectStats.sources || 0} 份资料 / ${projectStats.chunks || 0} 个片段` : "将在首次检索时建立"}</p>${state.runtime.fallback ? '<div class="banner">Hybrid RAG 当前已自动回退关键词检索，不会阻断资料准备和文档生成。</div>' : ""}<div class="help">检索结果继续展示来源和原文，便于检查生成依据；向量 ID、内部得分和索引治理字段不会进入任务正文。扩展新工具仍需实现后端适配器，添加名字不会自动获得工具能力。</div></div>`;
+  const connectionNote = document.createElement("div");
+  connectionNote.className = state.runtime.codex_error ? "banner" : "help";
+  connectionNote.textContent = state.runtime.codex_error ||
+    "找到 CLI 只表示本机可执行入口存在，不代表账号、模型与网络已通过真实生成测试。登录与认证由本机 Codex 管理；工作台不会复制凭据。";
+  $("#content").appendChild(connectionNote);
 }

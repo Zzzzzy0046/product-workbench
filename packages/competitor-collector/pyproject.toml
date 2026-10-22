@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "competitor-material-collector"
+version = "0.1.0"
+description = "Standalone local competitor store-material collector with account isolation."
+requires-python = ">=3.11,<3.14"
+dependencies = ["google-play-scraper>=1.2.7,<2", "requests>=2.32,<3", "Pillow>=10,<13"]
+
+[project.optional-dependencies]
+translation = ["deep-translator>=1.11,<2"]
+ai-translation = ["openai>=1.40,<2"]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+competitor-collector = "competitor_collector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["competitor_collector*"]
+
+[tool.setuptools.package-data]
+competitor_collector = ["static/*.html", "static/*.css", "static/*.js"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

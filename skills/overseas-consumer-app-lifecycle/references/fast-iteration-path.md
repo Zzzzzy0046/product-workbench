@@ -4,25 +4,27 @@ Use this path when the category is already chosen and the team wants to move fro
 
 ## Intake
 
-Capture product direction, target platform, team/timebox, named competitors and available materials. Materials may include competitor review CSV, policy links or documents, technical logs, screenshots and existing research.
+Capture current direction, requested scope and stopping point, optional platform, supplied competitor candidates and available evidence. Do not require a team/timebox field or a complete prior report to start a scoped task.
 
 ## F1 New Product Analysis
 
-Create one complete Heart Rate-style product analysis: evidence index, industry/category, users and scenarios, 3–5 competitor differences, positioning and value, V0 boundaries, product framework, 4–8 core modules, main flows and monetisation. It must be detailed enough to explain the whole product before page-level PRD work. Do not add a platform, permissions, data or policy chapter. Do not require user interviews or create assumptions, risks, validation tasks, Gates or technical Spikes.
+Use the five chapter templates: category/users, competitor choices/differences, positioning/scope, actual module framework, and flows/monetisation/next handoff. Preserve the complete Heart Rate product story without a minimum word, competitor or module count. Candidate comparisons use supplied download/revenue/experience evidence and user-selected roles; never invent missing figures or infer advertising revenue from store estimates. Explain observations and product choices rather than repeat each scenario in several tables. Keep scope detailed once in chapter 6; the handoff references it. Do not add platform/permissions/policy chapters, interviews, risks, Gates or Spikes.
 
 ## F2 Core PRD
 
-Write only the current build: usually 3–5 core pages or functions, business rules, relevant states, recovery paths, UI copy and acceptance criteria. Link each competitor screenshot or source used. Put implementation questions under “Engineering confirmation”.
+After analysis, work by the current module: needed shared rules and flow/pages → external prototype handoff and Chinese page notes → real review changes → consistency and handoff. F2 is optional when an independent document is needed; reuse confirmed page notes and IDs, do not write a second variant. Explain actual page form, background, region hierarchy, copy and action results. Use differences for simple states and business-themed notes, not fixed columns on every page. Do not cap page count or inherit a generic App structure.
+
+For a rule change, keep one change table with old wording, confirmed new wording and exact affected positions. Other documents reference that entry and add only new differences; uninspected or unwritten objects remain explicitly pending.
 
 ## F3 Development Acceptance Checklist
 
-Use one living document before and after a build. Define expected results first, then add actual result, status, log/screenshot/video/report, fix owner and retest evidence. Tracking is optional and limited to 5–8 core events when needed.
+Product-facing acceptance uses scenario/steps/expected only. F3 is optional: reuse those cases and stable IDs, then add actual results, evidence and retest after testing; no evidence means NOT_RUN. Reuse the full tracking scheme's event IDs and parameters for verification, not a newly reduced event set. Actual logs and statuses have one maintenance location in F3; tracking design only links the expected verification.
 
 ## Output budgets
 
-- F1: normally 12,000–16,000 Chinese characters.
-- F2: up to 8,000 Chinese characters.
-- F3: up to 5,000 Chinese characters.
+- Use the current task configuration as the generation budget, not a required length.
+- Retain confirmed modules, copy and rules. Split a large authorized scope by module rather than silently removing pages.
+- A complete analysis does not require repeated scope lists, generic user motives or separate reports for every attachment.
 
 Compress repeated context first. Never remove source references, competitor differences, product scope, function framework, core module proposals or actual acceptance evidence merely to meet a budget.
 

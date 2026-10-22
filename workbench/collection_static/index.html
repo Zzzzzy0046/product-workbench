@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>数据采集工作台</title>
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/collection.css">
+  <script src="/collection.js" defer></script>
+  <script src="/features/integrations.js" defer></script>
+  <script src="/features/competitor_revenue.js" defer></script>
+  <script src="/features/competitor_discovery.js" defer></script>
+  <script src="/features/android_capture.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand"><span class="mark">D /</span><div>数据采集<small>DATA COLLECTOR</small></div></div>
+    <button class="primary" id="new-project">＋ 新建采集项目</button>
+    <div class="nav-label">采集项目</div><nav id="projects" aria-label="采集项目"></nav>
+    <div class="sidebar-bottom"><button id="help">使用说明</button><div class="local-status"><span></span>本机保存 · 数据采集专用版</div><small>从原始资料到可交接的数据包。</small></div>
+  </aside>
+  <main><header><span id="breadcrumb">数据采集 / 我的项目</span><span class="version">独立版 1.0</span></header>
+    <div id="banner" class="banner" role="status" hidden></div><section id="content"><div class="empty">正在连接数据采集工作台…</div></section>
+  </main>
+  <dialog id="modal" aria-labelledby="modal-label"><div class="modal-top"><span id="modal-label">数据采集</span><button id="close-modal" aria-label="关闭">×</button></div><div id="modal-body"></div></dialog>
+  <div id="toast" role="status" hidden></div>
+</body>
+</html>

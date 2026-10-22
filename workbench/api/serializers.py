@@ -7,6 +7,9 @@ from urllib.parse import quote
 
 
 def encode_body(data, content_type):
+    # Downloads can already be encoded JSON files rather than Python objects.
+    if isinstance(data, (bytes, bytearray)):
+        return bytes(data)
     if content_type.startswith("application/json"):
         return json.dumps(data, ensure_ascii=False).encode()
     return data

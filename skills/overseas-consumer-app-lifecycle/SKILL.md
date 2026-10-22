@@ -1,67 +1,43 @@
 ---
 name: overseas-consumer-app-lifecycle
-description: "Orchestrate overseas consumer-app work for small fast-moving teams through complete Heart Rate-style new-product analysis, a core PRD, and development acceptance. Use formal gates and research only when explicitly requested."
+description: "Route small-team overseas consumer-app work by the current stage: complete Chinese new-product analysis, page-first requirements, review changes and scoped handoff. PRD, tracking and real-build acceptance are optional."
 ---
 
-# Overseas Consumer App Lifecycle
+# 小团队出海 App 工作流
 
-## Purpose
+## 选择当前工作
 
-Route an assigned consumer-App category through the smallest useful set of Chinese deliverables. The default is not a formal stage-gate process.
+品类已决定要做，日常主干为：市场与竞品分析 → 原型图＋需求说明 → 初审修改 → 终审整理 → 需求评审。它是导航，不是必须跑完的审批链；从用户当前阶段继续，只交付本轮指定内容。
 
-```text
-Current direction + supplied evidence
-  → F1 New Product Analysis
-  → F2 Core PRD
-  → F3 Development Acceptance Checklist
-```
+- 普通新品与快速迭代，读 [references/fast-iteration-path.md](references/fast-iteration-path.md)。完整新品分析保留 Heart Rate 产品故事，不压成定义卡，也不自动升级为正式研究。
+- 选择具体产物，读 [references/artifact-router.md](references/artifact-router.md)。独立 F2、完整埋点、三列表产品验收与 F3 实测按需，不默认生成全套。
+- 正式 0–12 章、立项或阶段门仅在明确要求时使用历史 T1–T4；需要 Gate 时读 [references/gates.md](references/gates.md)。
+- 恢复已有项目时读 [references/manifest-contract.md](references/manifest-contract.md)，沿用已存在产物和确认，不因补交接重新立项。
 
-Paid acquisition, media buying, attribution, ASO copy, store assets and store publishing are out of scope. Fast F1 does not contain a platform, permissions, data or policy section; concrete permission interactions belong in the relevant F2 page only when required.
+模板路径均相对工作台仓库根目录。先定位当前仓库，不假设固定磁盘、产品值或外部连接可用。
 
-## Mode selection
+## 事实与确认边界
 
-- **Fast path by default:** read [references/fast-iteration-path.md](references/fast-iteration-path.md). Use for an assigned category, a small team, competitor-led development or a quick iteration request.
-- **Formal full path only by explicit request:** use historical T1–T4 and formal gates only for a requested 0–12 research package, formal investment review or broad cross-team handoff.
-- **Scoped task:** produce only the requested artifact. Do not expand a PRD or review request into the lifecycle.
-- **Existing product:** use real behaviour and data when supplied; do not invent launch or store state.
+先读当前要求、指定基线及本轮资料。用户当前确认和指定的确认基线约定业务规则；当前原型、草图或运行行为描述实际表现。二者不一致时列来源与差异，不凭日期、文件名或实现偏差擅自覆盖约定。
 
-“完整新品分析” still uses the fast F1 when the user also says small team, quick iteration or competitor-led development. It means a complete usable analysis, not automatically a 0–12 chapter report.
+资料保留来源、日期及适用范围。评论只代表当前样本，截图不证明完整交互，第三方收入估算不证明广告收入或真实收益。没有资料就说明未覆盖，不硬凑画像、因果、竞品或商业数值；案例只能提供方法。
 
-## Opening sequence
+候选资料可辅助用户选用，但不自动确定最终竞品。近期下载与累计安装、商店收入与广告收入分开；保留平台、地区、周期、来源、覆盖口径及实际体验范围，未知不写 0。
 
-1. Read current user direction and all explicitly selected project materials.
-2. Apply Source of Truth priority: current user confirmation, current source/prototype/real behaviour, accepted project document, historical knowledge, generic template.
-3. Retrieve only relevant Product KB methods/templates when available.
-4. Choose F1, F2 or F3 and execute the smallest useful next deliverable.
+## 最小维护原则
 
-Do not block on an undefined target user or missing user interviews. Describe likely users from the product direction, competitor use cases and supplied evidence. Do not create a research programme unless asked.
+- F1 保留五章，范围集中一处；只对选中竞品深入，按“观察 → 产品含义 → 本产品取舍”表达。不套标准 App 功能树或广告顺序，不强凑竞品、模块或页面数量。
+- 页面先写用途、呈现形式、区域层级、必要 UI 文案，再按业务主题说明条件、操作、结果、返回及真实需要的边界。简单状态补差异；系统接管只说明触发与返回。
+- 原型旁注和 F2 共用一份已确认页面正文及稳定 ID。已有流程、索引、规则和用例时复用或引用，只补变化。
+- 同轮只维护一份规则变更表，核对“旧口径 → 已确认新口径 → 各产物具体位置”。未读取标未核对，未实际写回标待同步。
+- 产品验收只写场景、步骤、预期；F3 沿用原编号及预期增补实测。埋点方案负责设计，F3 引用原事件及参数验证，不另设计或压成固定数量，实际日志与状态只维护一处。
 
-## Evidence inputs
+## 输出与执行
 
-Competitor review CSV, policy sources, technical logs, screenshots and research documents are working inputs and must enter the deliverable when selected:
+正式正文中文，必要 UI copy 和技术名词保留英文。选定的评论、截图、日志及研究资料进入资料索引并支持相关结论，不复制整份原始材料。
 
-- list them in the document evidence index;
-- explain the material finding and where it changes the product, PRD or acceptance result;
-- pass screenshots as visual input and describe relevant UI/state details;
-- preserve links, filenames and dates;
-- summarize relevant content instead of pasting raw files.
+不默认输出访谈、假设验证、风险清单、技术 Spike、Gate、条件闭环或 F1 独立平台权限章节。付费投放、ASO 与商店发布不在本流程内。
 
-Fast mode does not use `[fact]`, `[inference]`, `[assumption]`, `[risk]` or validation labels. It also does not create risk registers, user interview plans, technical Spike documents, Gates or condition-closure tasks. Ordinary implementation uncertainty belongs in “Engineering confirmation”; actual defects belong in F3.
+只声明实际完成的工作。原型制作说明不等于写入 Figma/Axure，静态审查不等于真机验收，工作台确认不等于部门业务评审通过。外部工具不可用时说明边界，不虚构操作。
 
-## Canonical fast deliverables
-
-- F1: `knowledge/templates/f1-new-product-analysis.md` — complete Heart Rate-style product analysis with evidence, competitor differences, product framework, core modules, flows and monetisation.
-- F2: `knowledge/templates/f2-core-prd.md` — only the pages, rules, states and acceptance needed for the current build.
-- F3: `knowledge/templates/f3-development-acceptance.md` — one living checklist for planned and actual results.
-
-Read [references/artifact-router.md](references/artifact-router.md) for routing. Read [references/gates.md](references/gates.md) only when the user explicitly requests a formal gate. Read [references/manifest-contract.md](references/manifest-contract.md) when resuming or handing off a saved project.
-
-When real competitor reviews are required, read [references/competitor-review-collector.md](references/competitor-review-collector.md). The local collector acquires raw reviews only; ordinary F1 directly analyzes an uploaded CSV.
-
-## Handoff
-
-1. Verify the current deliverable exists and stays within its scope and length budget.
-2. Ensure every selected source appears in the evidence index and is used near the relevant conclusion.
-3. Keep accepted upstream documents as references instead of repeating their content.
-4. Stop after the requested deliverable. Do not auto-generate later documents.
-5. Do not write to Product KB, Notion or GitHub without explicit authorization.
+只有当前任务确实需要采集评论时才读 [references/competitor-review-collector.md](references/competitor-review-collector.md)，核对当前工具及翻译选项。普通分析可直接使用上传 CSV，不强制再次采集。不自动写入知识库、Notion 或 GitHub。

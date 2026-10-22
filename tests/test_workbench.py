@@ -547,7 +547,8 @@ def test_condition_requires_owner_due_and_closing_evidence(bench):
 def test_fast_acceptance_combines_plan_and_actual_evidence(bench):
     p=bench.create_project('开发验收','')
     plan=bench.prepare(p['id'],'fast/acceptance','',[])
-    assert '同一张表填写“实测、证据和修改结果”' in plan['prompt']
+    assert '不重新生成另一套用例' in plan['prompt']
+    assert '实测结果' in plan['prompt'] and 'NOT_RUN' in plan['prompt']
     assert '正文最多 5000 个中文字符' in plan['prompt']
     evidence=bench.add_document(p['id'],'实际测试记录.txt','构建 v0.1，Pixel 设备，QA-001 实际执行失败。'.encode())
     job=bench.prepare(p['id'],'fast/acceptance','',[evidence['id']])
