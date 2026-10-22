@@ -68,9 +68,9 @@ F2 需要展开核心页面、业务规则与验收标准。
 }
 
 
-def _complete_and_accept(bench, project_id, task_id):
+def _complete_and_accept(bench, project_id, task_id, output=None):
     job = bench.prepare(project_id, task_id, "只处理本章")
-    bench.complete(job["id"], SECTION_OUTPUTS[task_id])
+    bench.complete(job["id"], output or SECTION_OUTPUTS[task_id])
     bench.review(job["id"], "accepted", "本章已确认")
     return bench.job(job["id"])
 
@@ -139,5 +139,37 @@ def test_f1_assembly_blocks_when_any_chapter_is_unconfirmed(tmp_path):
         _complete_and_accept(bench, project["id"], SECTION_TASKS[0])
         with pytest.raises(ValueError, match="以下章节尚未确认"):
             bench.assemble_sections(project["id"])
+    finally:
+        bench.close()
+
+
+def test_f1_assembly_drops_chapter_local_source_tables(tmp_path):
+    # Each chapter numbers its own index (S1 = store listing there), but merged
+    # body citations are renumbered globally (S1 = F1-1). Keeping the chapter
+    # tables would point readers at the wrong source; the merged index replaces them.
+    bench = app.Workbench(tmp_path, runner=lambda _: "unused")
+    try:
+        project = bench.create_project("分章索引", "已确定要做的新品")
+        outputs = dict(SECTION_OUTPUTS)
+        outputs["fast/f1-competitor-differences"] = outputs["fast/f1-competitor-differences"].rstrip() + """
+
+## 资料索引
+
+以下项目附件均保留。
+
+| 编号 | 证据附件 | 使用边界 |
+|---|---|---|
+| S1 | 本章局部编号的商店信息.md | 局部编号行 |
+
+**证据不足与最小下一步：**补一次主对标的连续操作记录。
+"""
+        for task_id in SECTION_TASKS:
+            _complete_and_accept(bench, project["id"], task_id, outputs[task_id])
+        merged = bench.assemble_sections(project["id"])["output"]
+        assert merged.count("资料索引") == 1
+        assert "## 1. 资料索引" in merged
+        assert "本章局部编号的商店信息" not in merged
+        assert "以下项目附件均保留" not in merged
+        assert "**证据不足与最小下一步：**补一次主对标的连续操作记录。" in merged
     finally:
         bench.close()

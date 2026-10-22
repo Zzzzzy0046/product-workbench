@@ -675,7 +675,31 @@ class JobService(BoundService):
             if line.startswith("# "):
                 lines.pop(index)
             break
-        return "\n".join(lines).strip()
+        return "\n".join(JobService._without_local_source_index(lines)).strip()
+
+    @staticmethod
+    def _without_local_source_index(lines):
+        """Drop a chapter's own "## 资料索引" heading, intro and table.
+
+        Chapter tables use chapter-local numbering while merged citations are
+        renumbered globally, so the merged index replaces them. Prose after the
+        table (evidence gaps, next step) is chapter content and is kept.
+        """
+        kept, index = [], 0
+        while index < len(lines):
+            if re.match(r"^##\s+资料索引\s*$", lines[index].strip()):
+                index += 1
+                lookahead = index
+                while lookahead < len(lines) and not lines[lookahead].lstrip().startswith(("|", "#")):
+                    lookahead += 1
+                if lookahead < len(lines) and lines[lookahead].lstrip().startswith("|"):
+                    index = lookahead
+                    while index < len(lines) and lines[index].lstrip().startswith("|"):
+                        index += 1
+                continue
+            kept.append(lines[index])
+            index += 1
+        return kept
 
     @staticmethod
     def _table_text(value):
