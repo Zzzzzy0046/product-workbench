@@ -10,6 +10,41 @@
   --shadow: 0 18px 55px #2338320e;
 }
 
+/* Codex onboarding: three deliberately separate evidence levels, one quiet card. */
+.codex-connection-card { border-color: #aebfaf; margin-bottom: 28px; padding: 26px; }
+.codex-connection-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.codex-connection-heading h2 { margin: 7px 0 10px; font-size: 23px; }
+.codex-connection-heading p { max-width: 660px; color: var(--muted); margin: 0; font-size: 13px; line-height: 1.8; }
+.codex-connection-heading > .tag { flex-shrink: 0; margin-top: 6px; }
+.codex-connection-steps { list-style: none; padding: 0; margin: 24px 0 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 12px; background: #eef2ea; }
+.codex-connection-steps > li { display: flex; align-items: flex-start; gap: 12px; padding: 18px; min-width: 0; }
+.codex-connection-steps > li + li { border-left: 1px solid var(--line); }
+.codex-step-number { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--white); color: var(--green); flex-shrink: 0; font-size: 12px; }
+.codex-connection-steps h3 { margin: 0 0 10px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.codex-connection-steps strong { font-size: 14px; }
+.codex-connection-steps p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.7; overflow-wrap: anywhere; }
+.codex-connection-boundary { margin: 0 0 18px; }
+.codex-connection-actions { flex-wrap: wrap; margin: 16px 0; }
+.codex-operation { padding: 14px 16px; margin: 18px 0; background: var(--light); border-left: 3px solid var(--green); border-radius: 0 8px 8px 0; font-size: 12px; overflow-wrap: anywhere; }
+.codex-operation.is-error { border-left-color: var(--accent); }
+.codex-operation p { margin: 7px 0 0; line-height: 1.75; }
+.codex-connection-notice { font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; color: var(--accent); }
+.codex-install-help { padding: 12px 0 0; font-size: 12px; line-height: 1.8; }
+.codex-connection-path { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; }
+.codex-connection-path summary { cursor: pointer; font-size: 12px; }
+.codex-connection-path dl { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 10px 12px; margin: 20px 0; font-size: 12px; line-height: 1.7; }
+.codex-connection-path dt { color: var(--muted); }
+.codex-connection-path dd { margin: 0; overflow-wrap: anywhere; font-family: Consolas, monospace; }
+.codex-connection-path fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.codex-connection-path label { font-size: 12px; }
+.codex-connection-path input, .codex-connection-path select { width: 100%; box-sizing: border-box; font-size: 12px; }
+.codex-connection-path input { font-family: Consolas, monospace; }
+@media (max-width: 900px) {
+  .codex-connection-heading { flex-direction: column; gap: 8px; }
+  .codex-connection-steps { grid-template-columns: 1fr; }
+  .codex-connection-steps > li + li { border-left: 0; border-top: 1px solid var(--line); }
+}
+
 /* Competitor discovery: read-only candidates -> explicit choices -> collection. */
 .competitor-entry-card {
   display: flex;

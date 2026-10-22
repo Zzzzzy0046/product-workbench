@@ -35,6 +35,7 @@ def test_workbench_composes_domain_services(bench):
         'lanhu_adapter': 'LanhuAdapter',
         'review_scraper': 'ReviewScraperAdapter',
         'codex_runner': 'CodexRunner',
+        'codex_connection': 'CodexConnectionService',
     }
 
     assert {name: getattr(bench, name).__class__.__name__ for name in expected} == expected

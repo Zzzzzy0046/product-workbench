@@ -1,6 +1,6 @@
 # 产品工作台 HTTP API 调用说明
 
-版本：v1.1｜日期：2026-10-22｜对象：研究 Windows EXE 或源码运行版的技术同事
+版本：v1.2｜日期：2026-10-22｜对象：研究 Windows EXE 或源码运行版的技术同事
 
 这是当前 `workbench` 本地服务已经实现的 HTTP 接口，默认地址为 `http://127.0.0.1:8765`。EXE 与源码运行版应使用同一组 HTTP 路由；启动方式和 EXE 自身参数以随包使用说明为准。本说明重点覆盖项目、文件导入、竞品评论和商店采集、Android 自动走查及外部收入资料，同时保留全部现有文档任务接口供查阅。
 
@@ -216,6 +216,30 @@ download(f"/api/documents/{document_id}/download", "downloaded-source" + source.
 明确输入接口的 `competitor_ids/document_ids` 均为 ID 数组，返回 `sources`（文件 ID、名称、SHA-256、创建时间及选中竞品归属）、`captured_at` 和 `source_selection_mode:"explicit"`。所选资料必须已确认入库，并处于同项目及当前版本范围；竞品资料必须至少属于一个同时勾选的未归档竞品。项目公共资料可以配合 `competitor_ids:[]` 单独使用。只勾选竞品不会自动把它的所有文件加入输入，待确认采集批次也不会成为可引用原件。
 
 核对输入后，需另行调用 `/api/prepare` 并显式传 `source_selection_mode:"explicit"`、同一组 `document_ids/competitor_ids`，才会准备任务包；准备任务最多明确选择 1–12 份。保存输入快照不等于生成或确认分析结论，详见第 10 节。
+
+### 4.4 本机 Codex 连接与首次登录
+
+这一组接口是本机工作台设置，不是项目数据。状态检查、浏览器登录、实际模型测试严格分开；打开页面或 `GET` 不启动 CLI，不自动发送模型请求。
+
+| 接口 | 请求 | 返回 |
+|---|---|---|
+| `GET /api/integrations/codex` | 无 | 200 安全状态快照与有限发现的 CLI 候选 |
+| `POST /api/integrations/codex` | `{"binary_path":"本机绝对路径/codex.exe"}`；空字符串恢复自动 | 200 新快照；只保存路径，不保存认证 |
+| `POST /api/integrations/codex/check` | `{}` | 202；异步执行 CLI 版本、`login status`，不推理 |
+| `POST /api/integrations/codex/login` | `{"confirmed":true}` | 202；官方 CLI 打开浏览器，由本人授权 |
+| `POST /api/integrations/codex/test` | `{"confirmed":true}` | 202；固定极小模型请求，需要使用者确认额度 |
+| `POST /api/integrations/codex/cancel` | `{"operation_id":"当前操作ID"}` | 200；仅取消该次连接操作，不登出账号 |
+
+快照含 `available,command,binary_path,source,candidates,version,model,config_path,env_managed,message`，以及 `auth,test,operation`：
+
+- `auth.status` 为 `unknown/logged_in/not_logged_in/error`，仅返回认证方式枚举与安全中文摘要，不返回 CLI 原始文本。
+- `test.status` 为 `not_tested/passed/failed`。登录成功不自动变成生成测试通过。
+- `operation` 为 `null` 或含 `id,kind,status,started_at,updated_at,message` 的对象。`kind` 为 `check/login/test`；`status` 为 `running/succeeded/failed/cancelled`。轮询同一个只读 GET，不能靠反复 POST 查询进度。
+- 登录或测试必须是 JSON 布尔值 `confirmed: true`，缺少确认或写成字符串都拒绝。路径保存拒绝命令参数、脚本、网络共享及非本机原生 CLI。
+- 本机环境变量强制指定 CLI 时，不能在页面覆盖；保存路径、PATH/npm 与有限桌面目录发现用于其余情况。未找到不静默安装软件。
+- 改路径、登录和测试与正在执行的文档生成、设备走查互斥；取消后进程尚未回收时仍不放行新操作。
+- 连接测试在临时空目录执行固定 Prompt，不携带任何项目背景、评论或截图，不启用用户工具、MCP、搜索或 shell。它会使用当前本机模型连接及账号额度。
+- 登录原文、认证文件和临时测试结果不进入项目、数据库或项目导出包。只有非秘密 CLI 路径保存在本机 preferences。
 
 ## 5. 商店候选搜索和详情
 

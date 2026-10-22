@@ -40,6 +40,8 @@ document.addEventListener("click", async (e) => {
     else if (b.dataset.action === "capabilities") {
       tab = "capabilities";
       draw();
+    } else if (b.dataset.codexConnection) {
+      await codexConnectionAction(b.dataset.codexConnection, b);
     } else if (b.dataset.action === "lanhu-config") {
       lanhuConfigForm();
     } else if (b.dataset.action === "review-scrape") {

@@ -13,7 +13,7 @@ import threading
 import traceback
 import webbrowser
 
-RELEASE_VERSION = '2026.10.22.3'
+RELEASE_VERSION = '2026.10.22.4'
 
 
 def resource_root():
@@ -68,8 +68,10 @@ def available_port(preferred, automatic):
 
 def self_test(root):
     modules = ['PIL', 'pypdf', 'yaml', 'docx', 'openpyxl', 'reportlab',
-               'mcp.server.fastmcp', 'google_play_scraper', 'deep_translator', 'requests']
+               'mcp.server.fastmcp', 'google_play_scraper', 'deep_translator', 'requests',
+               'workbench.services.codex_connection_service']
     files = ['workbench/static/index.html', 'workbench/capabilities/fast.json',
+             'workbench/static/features/codex_connection.js',
              'workbench/workflows/presets.json', 'knowledge/templates/f2-core-prd.md',
              'packages/competitor-collector/competitor_collector/engine.py',
              'packages/competitor-collector/competitor_collector/scrapers.py',

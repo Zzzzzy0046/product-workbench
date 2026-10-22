@@ -943,8 +943,12 @@ class JobService(BoundService):
                 raise ValueError("只有待执行任务可以开始；失败任务请重新准备。")
             if self.rows("SELECT id FROM jobs WHERE status IN ('running','queued')"):
                 raise ValueError("已有任务执行中，请等待完成后再开始。")
-            if self.runner == self.run_codex and not codex_command():
-                raise ValueError("未找到 Codex CLI。请先安装并登录，或下载任务包在当前对话运行。")
+            connection = getattr(self._workbench, "codex_connection", None)
+            operation = connection.snapshot().get("operation") if connection else None
+            if operation and operation.get("status") == "running" and operation.get("kind") in {"login", "test"}:
+                raise ValueError("Codex 正在登录或测试连接，请等待完成或取消后再开始生成。")
+            if self.runner == self.run_codex and not (connection.command() if connection else codex_command()):
+                raise ValueError("未找到 Codex CLI。请先在能力与工具中连接 Codex，或下载任务包在当前对话运行。")
             with self.db() as db:
                 db.execute("UPDATE jobs SET status='queued',updated=? WHERE id=?", (now(),job_id))
             worker = threading.Thread(target=self.execute, args=(job_id,), daemon=True)

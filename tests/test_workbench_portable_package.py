@@ -17,6 +17,7 @@ def package_inputs(tmp_path, monkeypatch):
         'scripts/packaging/api_client_example.py': '# current example',
         'docs/WORKBENCH-HTTP-API.md': '# Current API\n\n/api/competitors/inputs\nschema 3',
         'docs/WORKBENCH-COMPETITOR-DOSSIERS.md': '# 当前档案说明',
+        'docs/WORKBENCH-CODEX-CONNECTION.md': '# Codex 连接与首次使用',
     }.items():
         file = source / relative
         file.parent.mkdir(parents=True, exist_ok=True)

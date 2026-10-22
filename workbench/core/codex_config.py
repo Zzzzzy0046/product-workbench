@@ -10,9 +10,74 @@ from urllib.parse import urlsplit
 
 from workbench.core.constants import HERE
 
-def codex_command():
-    """Use an explicit install first, then the native CLI before npm's shim."""
+def validate_codex_binary(value):
+    """Validate a user-selected native CLI, never a shell command or wrapper."""
+    if not isinstance(value, str) or not value.strip() or len(value) > 1024 or any(char in value for char in ('\x00', '\r', '\n', '"')):
+        raise ValueError("请填写 Codex 原生可执行文件的完整路径，不要填写命令参数或脚本。")
+    if value.strip().startswith(("\\\\", "//")):
+        raise ValueError("请选择本机磁盘中的 Codex 文件，不支持网络共享路径。")
+    candidate = Path(value.strip()).expanduser()
+    if not candidate.is_absolute() or not candidate.is_file():
+        raise ValueError("指定的 Codex 文件不存在，请选择本机完整路径。")
+    candidate = candidate.resolve()
+    if str(candidate).startswith(("\\\\", "//")):
+        raise ValueError("请选择本机磁盘中的 Codex 文件，不支持网络共享路径。")
+    if os.name == "nt":
+        import ctypes
+        if ctypes.windll.kernel32.GetDriveTypeW(candidate.anchor) == 4:
+            raise ValueError("请选择本机磁盘中的 Codex 文件，不支持网络映射盘。")
+        if candidate.name.lower() != "codex.exe":
+            raise ValueError("请选择原生 codex.exe，不支持其他程序或 .cmd/.ps1 脚本。")
+        try:
+            with candidate.open("rb") as stream:
+                valid = stream.read(2) == b"MZ"
+        except OSError:
+            valid = False
+        if not valid:
+            raise ValueError("指定文件不是可读取的 Windows Codex 原生可执行文件。")
+    elif candidate.name != "codex" or not os.access(candidate, os.X_OK):
+        raise ValueError("请选择具有执行权限的原生 codex 文件。")
+    return str(candidate)
+
+
+def _desktop_codex_candidates():
+    """Bounded lookup in the official desktop CLI directory, not a disk scan."""
+    local = os.environ.get("LOCALAPPDATA", "").strip()
+    if os.name != "nt" or not local:
+        return []
+    root = Path(local) / "OpenAI" / "Codex" / "bin"
+    try:
+        entries = sorted(root.iterdir(), key=lambda item: item.name, reverse=True)[:64]
+    except OSError:
+        return []
+    candidates = [root / "codex.exe"] + [item / "codex.exe" for item in entries if item.is_dir()]
+    result = []
+    for path in candidates:
+        if path.is_file():
+            try:
+                result.append(validate_codex_binary(str(path)))
+            except ValueError:
+                pass
+    return result
+
+
+def codex_discovery(saved_path=None):
+    """Discover without launching a CLI; env overrides remain authoritative."""
+    candidates = []
+
+    def add(path, source):
+        if path and not any(item["path"] == path for item in candidates):
+            candidates.append({"path": path, "label": "Codex 桌面客户端" if source == "desktop" else "Codex CLI", "source": source})
+
     binary_override = os.environ.get("WORKBENCH_CODEX_BIN", "").strip()
+    script_override = os.environ.get("WORKBENCH_CODEX_JS", "").strip()
+    native = shutil.which("codex.exe" if os.name == "nt" else "codex")
+    if native:
+        add(native, "path")
+    desktop = _desktop_codex_candidates()
+    for path in desktop:
+        add(path, "desktop")
+    result = {"command": None, "source": "missing", "candidates": candidates, "env_managed": bool(binary_override or script_override)}
     if binary_override:
         candidate = Path(binary_override).expanduser()
         executable = str(candidate.resolve()) if candidate.is_file() else shutil.which(binary_override)
@@ -20,8 +85,8 @@ def codex_command():
             raise ValueError("WORKBENCH_CODEX_BIN 无效：请指定存在的 Codex 原生可执行文件，不要填写命令参数或 .cmd/.ps1 脚本。")
         if os.name != "nt" and not os.access(executable, os.X_OK):
             raise ValueError("WORKBENCH_CODEX_BIN 指定的文件没有执行权限。")
-        return [executable]
-    script_override = os.environ.get("WORKBENCH_CODEX_JS", "").strip()
+        add(executable, "environment")
+        return dict(result, command=[executable], source="environment")
     if script_override:
         script = Path(script_override).expanduser()
         if not script.is_file():
@@ -29,13 +94,25 @@ def codex_command():
         node = shutil.which("node")
         if not node:
             raise ValueError("WORKBENCH_CODEX_JS 需要 Node.js，但当前环境未找到 node。")
-        return [node, str(script.resolve())]
-    executable = shutil.which("codex.exe" if os.name == "nt" else "codex")
-    if executable:
-        return [executable]
+        return dict(result, command=[node, str(script.resolve())], source="environment")
+    if saved_path:
+        executable = validate_codex_binary(saved_path)
+        add(executable, "saved")
+        return dict(result, command=[executable], source="saved")
+    if native:
+        return dict(result, command=[native], source="path")
     script = Path(os.environ.get("APPDATA", "")) / "npm/node_modules/@openai/codex/bin/codex.js"
     node = shutil.which("node")
-    return [node, str(script)] if script.is_file() and node else None
+    if script.is_file() and node:
+        return dict(result, command=[node, str(script)], source="npm")
+    if desktop:
+        return dict(result, command=[desktop[0]], source="desktop")
+    return result
+
+
+def codex_command(saved_path=None):
+    """Return a no-shell argv, optionally using this workbench's saved path."""
+    return codex_discovery(saved_path)["command"]
 
 
 def configured_model():

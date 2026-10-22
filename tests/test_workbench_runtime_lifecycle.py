@@ -41,13 +41,11 @@ def test_embedded_close_stops_both_codex_and_scraper_processes(tmp_path, monkeyp
 def test_invalid_explicit_cli_setting_does_not_break_state(tmp_path, monkeypatch):
     bench = app.Workbench(tmp_path, runner=lambda _: "unused")
     try:
-        def invalid_cli():
-            raise ValueError("WORKBENCH_CODEX_BIN 无效，请指定本机原生可执行文件。")
-
-        monkeypatch.setattr(app, "codex_command", invalid_cli)
+        monkeypatch.setenv("WORKBENCH_CODEX_BIN", "Z:/missing-workbench-test/codex.exe")
         runtime = bench.state()["runtime"]
         assert runtime["available"] is False
-        assert "WORKBENCH_CODEX_BIN" in runtime["codex_error"]
+        assert "路径配置无效" in runtime["codex_error"]
+        assert "missing-workbench-test" not in runtime["codex_error"]
         assert "token" not in runtime["codex_error"]
     finally:
         bench.close()

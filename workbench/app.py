@@ -22,6 +22,7 @@ from workbench.services.workflow_router_service import WorkflowRouterService
 from workbench.services.competitor_revenue_service import CompetitorRevenueService
 from workbench.services.competitor_service import CompetitorService
 from workbench.services.android_capture_service import AndroidCaptureService
+from workbench.services.codex_connection_service import CodexConnectionService
 from workbench.adapters.lanhu_adapter import LanhuAdapter
 from workbench.adapters.review_scraper import ReviewScraperAdapter
 from workbench.adapters.competitor_discovery import CompetitorDiscoveryAdapter
@@ -65,6 +66,7 @@ class Workbench:
         self.validation_service = ValidationService()
         self.storage_service = StorageService(self)
         self.storage_service.initialize()
+        self.codex_connection = CodexConnectionService(self)
         self.android_capture.recover()
         self.competitor_service.migrate()
 
@@ -359,6 +361,7 @@ class Workbench:
         return self.codex_runner.stop_process(*args, **kwargs)
 
     def close(self):
+        self.codex_connection.close()
         self.android_capture.close()
         self.competitor_discovery.close()
         with self.lock:
@@ -370,16 +373,13 @@ class Workbench:
 
     def state(self, project_id=None):
         runtime = self.retrieval_status()
-        try:
-            cli_available = bool(codex_command())
-            cli_error = ""
-        except ValueError as exc:
-            cli_available = False
-            cli_error = str(exc)
+        connection = self.codex_connection.snapshot()
+        cli_available = connection["available"]
+        cli_error = "" if cli_available else connection.get("message", "未找到 Codex CLI。")
         runtime.update({"available":cli_available,"codex_error":cli_error,"model":configured_model() or "CLI 默认模型","knowledge_count":len(self.knowledge())})
         project = self.project(project_id) if project_id else None
         workflow_mode = project["workflow_mode"] if project else "fast"
-        result = {"projects":self.rows("SELECT * FROM projects ORDER BY created DESC"),"trash":self.trash_items(),"packs":self.registry(),"workflows":self.workflows(workflow_mode),"tools":TOOLS,"runtime":runtime,"integrations":{"lanhu":self.lanhu_settings(),"review_scraper":self.review_scraper_settings()},"token":self.token}
+        result = {"projects":self.rows("SELECT * FROM projects ORDER BY created DESC"),"trash":self.trash_items(),"packs":self.registry(),"workflows":self.workflows(workflow_mode),"tools":TOOLS,"runtime":runtime,"integrations":{"lanhu":self.lanhu_settings(),"review_scraper":self.review_scraper_settings(),"codex":connection},"token":self.token}
         if project_id:
             result["project"] = project
             result["versions"] = self.product_versions(project_id)

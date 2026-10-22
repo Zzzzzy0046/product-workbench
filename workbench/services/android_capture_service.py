@@ -55,7 +55,8 @@ class AndroidCaptureService(BoundService):
         adb = next((Path(candidate).expanduser().resolve() for candidate in candidates if candidate and Path(candidate).expanduser().is_file()), None)
         error = ''
         try:
-            available = bool(codex_command())
+            connection = getattr(self._workbench, 'codex_connection', None)
+            available = bool(connection.command() if connection else codex_command())
         except ValueError as exc:
             available, error = False, str(exc)
         skill = self.skill_root()
@@ -277,6 +278,10 @@ class AndroidCaptureService(BoundService):
 
     def start(self, session_id, resume=False):
         with self.lock, self._capture_lock:
+            connection = getattr(self._workbench, 'codex_connection', None)
+            operation = connection.snapshot().get('operation') if connection else None
+            if operation and operation.get('status') == 'running' and operation.get('kind') in {'login', 'test'}:
+                raise ValueError('Codex 正在登录或测试连接，请等待完成或取消后再开始走查。')
             directory, record = self._find(session_id)
             if record.get('status') not in (RESUMABLE if resume else {'prepared'}):
                 raise ValueError('当前状态不能开始走查，请刷新后重试。')

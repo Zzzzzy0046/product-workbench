@@ -46,7 +46,8 @@ def codex_failure_summary(diagnostic):
 
 class CodexRunner(BoundService):
     def run_codex(self, job):
-        command = codex_command()
+        connection_service = getattr(self._workbench, "codex_connection", None)
+        command = connection_service.command() if connection_service else codex_command()
         if not command:
             raise ValueError("未找到 Codex CLI。")
         directory = self.data / "runs" / job["id"]

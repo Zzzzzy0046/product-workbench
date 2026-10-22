@@ -160,6 +160,13 @@ def prepare_runner(tmp_path, monkeypatch, **process_options):
     return runner_module.CodexRunner(host), job, directory, processes, popen_calls
 
 
+def test_runner_uses_the_connection_services_selected_cli(tmp_path, monkeypatch):
+    runner, job, _, _, calls = prepare_runner(tmp_path, monkeypatch, output='# 合成结果')
+    runner._workbench.codex_connection = SimpleNamespace(command=lambda: ['selected-fixture-codex'])
+    runner.run_codex(job)
+    assert calls[0][0][0] == 'selected-fixture-codex'
+
+
 def test_runner_builds_isolated_cli_uses_snapshot_model_and_utf8_prompt(tmp_path, local_config, monkeypatch):
     local_config.write_text('model_provider = "company"\n[model_providers.company]\nbase_url = "https://example.invalid/v1"\nenv_key = "WORKBENCH_TEST_CREDENTIAL"', encoding="utf-8")
     monkeypatch.setenv("WORKBENCH_TEST_CREDENTIAL", "fake-live-secret-never-in-argv")

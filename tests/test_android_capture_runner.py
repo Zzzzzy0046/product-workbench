@@ -116,6 +116,12 @@ def execute(fixture):
     return runner.run_capture_agent(fixture.service, fixture.session, fixture.directory, fixture.request)
 
 
+def test_capture_runner_uses_the_connection_services_selected_cli(capture_run):
+    capture_run.service.codex_connection = SimpleNamespace(command=lambda: ['selected-fixture-codex'])
+    execute(capture_run)
+    assert capture_run.calls[0][0][0] == 'selected-fixture-codex'
+
+
 def test_capture_runner_isolates_only_capture_mcp_and_keeps_connection_and_model(capture_run):
     fixture = capture_run
     result = execute(fixture)

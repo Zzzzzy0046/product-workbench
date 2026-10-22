@@ -56,7 +56,8 @@ def capture_prompt(request, skill_root):
 
 
 def run_capture_agent(service, session, directory, request):
-    command = codex_command()
+    connection_service = getattr(service, 'codex_connection', None)
+    command = connection_service.command() if connection_service else codex_command()
     if not command:
         raise ValueError('未找到 Codex CLI，请先在本机安装并登录。')
     connection = codex_runtime_settings()

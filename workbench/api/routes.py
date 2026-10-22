@@ -4,6 +4,8 @@ from workbench.core.runtime import *
 
 
 def dispatch_get(self, parsed, query):
+    if parsed.path == '/api/integrations/codex':
+        return self.respond(self.app.codex_connection.snapshot())
     if parsed.path.startswith('/api/android-capture/'):
         service = self.app.android_capture
         path = parsed.path.rstrip('/')
@@ -101,6 +103,17 @@ def dispatch_get(self, parsed, query):
 
 
 def dispatch_post(self, path, payload):
+    if (path == '/api/integrations/codex' or path.startswith('/api/integrations/codex/')) and not isinstance(payload, dict):
+        raise ValueError('Codex 连接请求必须是 JSON 对象。')
+    if path == '/api/integrations/codex':
+        return self.respond(self.app.codex_connection.configure(payload))
+    if path.startswith('/api/integrations/codex/'):
+        action = path.removeprefix('/api/integrations/codex/')
+        if action in {'check', 'login', 'test'}:
+            return self.respond(self.app.codex_connection.start(action, payload), 202)
+        if action == 'cancel':
+            return self.respond(self.app.codex_connection.cancel(payload.get('operation_id', '')))
+        return self.respond({'error': '未找到 Codex 连接接口。'}, 404)
     if path == '/api/android-capture/settings':
         return self.respond(self.app.android_capture.save_settings(payload))
     if path == '/api/android-capture/sessions':
