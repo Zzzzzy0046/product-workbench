@@ -10,6 +10,23 @@ from urllib.parse import urlsplit
 
 from workbench.core.constants import HERE
 
+def desktop_codex_binary():
+    """Newest CLI bundled with the Codex desktop app (lives in hashed, version-specific folders).
+
+    The desktop app only puts it on PATH for its own sessions; started elsewhere the
+    workbench would otherwise fall back to an older npm CLI that may reject the model.
+    """
+    local = os.environ.get("LOCALAPPDATA", "").strip()
+    if not local:
+        return ""
+    root = Path(local) / "OpenAI" / "Codex" / "bin"
+    name = "codex.exe" if os.name == "nt" else "codex"
+    candidates = [path for path in [*root.glob(f"*/{name}"), root / name] if path.is_file()]
+    if not candidates:
+        return ""
+    return str(max(candidates, key=lambda path: path.stat().st_mtime))
+
+
 def codex_command():
     """Use an explicit install first, then the native CLI before npm's shim."""
     binary_override = os.environ.get("WORKBENCH_CODEX_BIN", "").strip()
@@ -30,6 +47,9 @@ def codex_command():
         if not node:
             raise ValueError("WORKBENCH_CODEX_JS 需要 Node.js，但当前环境未找到 node。")
         return [node, str(script.resolve())]
+    desktop = desktop_codex_binary()
+    if desktop:
+        return [desktop]
     executable = shutil.which("codex.exe" if os.name == "nt" else "codex")
     if executable:
         return [executable]

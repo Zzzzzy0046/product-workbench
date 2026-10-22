@@ -274,6 +274,7 @@ def prepare_discovery(tmp_path, monkeypatch):
     monkeypatch.delenv("WORKBENCH_CODEX_BIN", raising=False)
     monkeypatch.delenv("WORKBENCH_CODEX_JS", raising=False)
     monkeypatch.setenv("APPDATA", str(tmp_path / "appdata"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "localappdata"))
     script = tmp_path / "appdata/npm/node_modules/@openai/codex/bin/codex.js"
     script.parent.mkdir(parents=True)
     script.write_text("// fake entry", encoding="utf-8")
@@ -302,6 +303,32 @@ def test_cli_discovery_explicit_script_beats_native_binary(tmp_path, monkeypatch
 def test_cli_discovery_prefers_native_over_default_npm_script(tmp_path, monkeypatch):
     _, binary, _ = prepare_discovery(tmp_path, monkeypatch)
     assert config_module.codex_command() == [str(binary)]
+
+
+def test_cli_discovery_prefers_newest_desktop_bundle_over_path(tmp_path, monkeypatch):
+    # The desktop app ships its CLI in hashed folders that are only on PATH inside
+    # its own sessions; started elsewhere, PATH resolves to an older npm shim that
+    # rejects newer models ("model not found").
+    _, path_binary, _ = prepare_discovery(tmp_path, monkeypatch)
+    native_name = "codex.exe" if os.name == "nt" else "codex"
+    root = tmp_path / "localappdata/OpenAI/Codex/bin"
+    older, newer = root / "aaa" / native_name, root / "bbb" / native_name
+    for index, path in enumerate([root / native_name, older, newer]):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"fake")
+        os.utime(path, (1_700_000_000 + index * 100, 1_700_000_000 + index * 100))
+    assert config_module.codex_command() == [str(newer)]
+    assert config_module.codex_command() != [str(path_binary)]
+
+
+def test_cli_discovery_explicit_binary_beats_desktop_bundle(tmp_path, monkeypatch):
+    _, binary, _ = prepare_discovery(tmp_path, monkeypatch)
+    native_name = "codex.exe" if os.name == "nt" else "codex"
+    bundled = tmp_path / "localappdata/OpenAI/Codex/bin/ccc" / native_name
+    bundled.parent.mkdir(parents=True)
+    bundled.write_bytes(b"fake")
+    monkeypatch.setenv("WORKBENCH_CODEX_BIN", str(binary))
+    assert config_module.codex_command() == [str(binary.resolve())]
 
 
 def test_cli_discovery_uses_npm_when_native_binary_is_absent(tmp_path, monkeypatch):
