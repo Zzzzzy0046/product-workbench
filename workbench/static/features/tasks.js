@@ -107,7 +107,9 @@ function prepareTask(key, options = {}) {
   };
   form.onsubmit = async (e) => {
     e.preventDefault();
+    const submitLabel = e.submitter.textContent;
     e.submitter.disabled = true;
+    e.submitter.textContent = "正在检索资料并准备任务包…";
     try {
       const j = await api("/api/prepare", {
         project_id: taskProjectId,
@@ -133,6 +135,7 @@ function prepareTask(key, options = {}) {
     } catch (err) {
       error(err);
       e.submitter.disabled = false;
+      e.submitter.textContent = submitLabel;
     }
   };
 }

@@ -846,7 +846,27 @@ class JobService(BoundService):
             } for issue in result["stale_upstream"])
             result["quality"]["warnings"] += len(result["stale_upstream"])
         result["has_newer_revision"] = bool(self.rows("SELECT id FROM jobs WHERE parent_job_id=? LIMIT 1", (job_id,)))
+        result["selected_document_ids"] = self._explicit_document_ids(result)
         return result
+
+    def _explicit_document_ids(self, job):
+        """Documents the user ticked when preparing, still present in the project."""
+        try:
+            snapshot = json.loads((self.data / "runs" / job["id"] / "执行记录.json").read_text(encoding="utf-8"))
+        except (OSError,ValueError,TypeError):
+            return []
+        selected = snapshot.get("selected_document_ids") if isinstance(snapshot, dict) else None
+        candidates = list(dict.fromkeys(value for value in (selected or []) if isinstance(value, str) and value))
+        if not candidates:
+            return []
+        placeholders = ",".join("?" for _ in candidates)
+        existing = {
+            row["id"] for row in self.rows(
+                f"SELECT id FROM documents WHERE project_id=? AND id IN ({placeholders})",
+                (job["project_id"],*candidates),
+            )
+        }
+        return [value for value in candidates if value in existing]
 
     def comments(self, job_id):
         if not self.rows("SELECT 1 AS found FROM jobs WHERE id=?", (job_id,)):

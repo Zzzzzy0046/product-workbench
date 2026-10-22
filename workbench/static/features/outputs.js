@@ -48,6 +48,13 @@ function f1ContinuationAction(job) {
     : { type: "assemble", taskKey: parent.key, label: "合并五章为完整 F1（不调用模型）" };
 }
 
+// Carry forward what the user explicitly chose; fall back to every upload the
+// previous chapter cited only when no explicit choice was recorded.
+function continuationReferenceIds(job) {
+  if ((job.selected_document_ids || []).length) return job.selected_document_ids;
+  return (job.sources || []).filter((source) => source.kind === "upload").map((source) => source.source_id);
+}
+
 /* ---------- Full-screen reader ---------- */
 
 let readerSideTab = "comments";
@@ -177,8 +184,7 @@ function showJob(job) {
           closeReader();
           return;
         }
-        const referenceIds = (job.sources || []).filter((source) => source.kind === "upload").map((source) => source.source_id);
-        prepareTask(continuation.taskKey, { documentIds: referenceIds });
+        prepareTask(continuation.taskKey, { documentIds: continuationReferenceIds(job) });
       } catch (err) { error(err); }
     };
     area.appendChild(button);

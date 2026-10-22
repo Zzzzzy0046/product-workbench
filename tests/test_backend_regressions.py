@@ -374,3 +374,15 @@ def test_concurrent_scrape_start_allows_only_one(bench, monkeypatch):
     second.join(5)
     assert sum(isinstance(item, ValueError) for item in results) == 1
     assert len(bench.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running')", (project["id"],))) == 1
+
+
+# 9. Job detail exposes only what the user explicitly ticked, so "continue to next
+#    chapter" does not carry auto-retrieved materials forward.
+def test_job_exposes_explicit_document_selection(bench):
+    project = bench.create_project("显式勾选", "")
+    picked = bench.add_document(project["id"], "商店信息.md", "GBA 模拟器商店描述，扫描导入游戏文件".encode())
+    bench.add_document(project["id"], "无关截图说明.md", "GBA 模拟器 工作台弹窗 截图 无关".encode())
+    job = bench.prepare(project["id"], "product/prd", "GBA 模拟器", [picked["id"]])
+    assert bench.job(job["id"])["selected_document_ids"] == [picked["id"]]
+    unselected = bench.prepare(project["id"], "product/prd", "GBA 模拟器")
+    assert bench.job(unselected["id"])["selected_document_ids"] == []
