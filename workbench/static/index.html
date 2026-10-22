@@ -27,26 +27,20 @@
   </head>
   <body>
     <aside class="sidebar">
-      <div class="brand">
-        <span class="mark">P /</span>
-        <div>产品工作台<small>PRODUCT WORKBENCH</small></div>
+      <div class="brand"><span class="mark">P</span>产品工作台</div>
+      <div class="nav-head">
+        <span class="nav-label">项目</span>
+        <button class="icon-button" id="new-project" title="新建项目" aria-label="新建项目">＋</button>
       </div>
-      <button class="primary" id="new-project">＋ 新建项目</button>
-      <div class="nav-label">我的项目</div>
       <nav id="projects" aria-label="项目"></nav>
       <div class="sidebar-bottom">
-        <button id="trash">♲ 项目回收站</button>
-        <button id="import-project">⇧ 导入项目包</button>
-        <button id="capabilities">◈ 能力与工具</button>
-        <div class="local-status"><span></span>本地存储 · 单人工作台</div>
-        <small>让背景留下，让工作继续。</small>
+        <button id="import-project">导入项目包</button>
+        <button id="capabilities">能力与工具</button>
+        <button id="trash">回收站</button>
+        <div class="local-status"><span></span>本地运行 · 单人工作台</div>
       </div>
     </aside>
     <main>
-      <header>
-        <span id="breadcrumb">工作空间 / 项目</span
-        ><span class="version">本地版 1.0</span>
-      </header>
       <div id="banner" class="banner" role="status" hidden></div>
       <section id="content">
         <div class="empty">正在连接本地工作台…</div>

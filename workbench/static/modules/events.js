@@ -7,6 +7,7 @@ document.addEventListener("click", async (e) => {
   if (!b) return;
   try {
     if (b.dataset.project) {
+      if (!(await confirmDiscardEdits())) return;
       projectId = b.dataset.project;
       if (androidCaptureModal) androidCaptureIsCurrent(androidCaptureModal);
       localStorage.setItem("workbench-project", projectId);
@@ -15,8 +16,17 @@ document.addEventListener("click", async (e) => {
       activeWorkflowStage = null;
       await refresh();
     } else if (b.dataset.tab) {
+      if (!(await confirmDiscardEdits())) return;
       tab = b.dataset.tab;
+      if (b.dataset.outputFilter) outputFilter = b.dataset.outputFilter;
       draw();
+    } else if (b.dataset.outputFilter) {
+      outputFilter = b.dataset.outputFilter;
+      drawOutputs();
+    } else if (b.dataset.settingsSection) {
+      if (!(await confirmDiscardEdits())) return;
+      settingsSection = b.dataset.settingsSection;
+      drawSettings();
     } else if (b.dataset.removePendingMaterial) {
       removePendingMaterial(b.dataset.removePendingMaterial);
     } else if (b.hasAttribute("data-clear-pending-materials")) {
@@ -111,6 +121,7 @@ document.addEventListener("click", async (e) => {
       activeWorkflowStage = null;
       drawTasks();
     } else if (b.dataset.pack) {
+      if (b.dataset.enabled === "false" && !window.confirm("停用这个能力？项目里对应的任务入口会隐藏，已有文档不受影响。")) return;
       b.disabled = true;
       await api("/api/packs", {
         id: b.dataset.pack,
@@ -178,6 +189,7 @@ document.addEventListener("click", async (e) => {
       showDocument(await api("/api/documents/" + b.dataset.document));
     } else if (b.dataset.translateDocument) {
       b.disabled = true;
+      b.dataset.busyLabel = b.textContent;
       b.textContent = "正在翻译…";
       const result = await api(`/api/documents/${encodeURIComponent(b.dataset.translateDocument)}/translate`, {});
       showDocument(await api(`/api/documents/${encodeURIComponent(b.dataset.translateDocument)}`));
@@ -189,10 +201,13 @@ document.addEventListener("click", async (e) => {
       showJob(await api("/api/jobs/" + b.dataset.run + "/start", {}));
       await refresh();
     } else if (b.dataset.cancel) {
+      const running = b.dataset.running === "true";
+      if (!window.confirm(running ? "停止生成？已消耗的模型额度不会退回，任务会标记为已取消。" : "取消这个待执行任务？之后可以恢复。")) return;
       b.disabled = true;
       showJob(await api("/api/jobs/" + b.dataset.cancel + "/cancel", {}));
       await refresh();
     } else if (b.dataset.cancelScrape) {
+      if (!window.confirm("取消这次采集？已抓到的数据不会入库。")) return;
       b.disabled = true;
       await api(`/api/reviews/scrape/${b.dataset.cancelScrape}/cancel`, {});
       await refresh();
@@ -252,6 +267,7 @@ document.addEventListener("click", async (e) => {
   } catch (err) {
     error(err);
     b.disabled = false;
+    if (b.dataset.busyLabel) b.textContent = b.dataset.busyLabel;
   }
 });
 

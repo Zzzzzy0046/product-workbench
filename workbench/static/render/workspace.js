@@ -1,53 +1,91 @@
 "use strict";
 
-/* workspace.js: loaded by index.html before the app bootstrap. */
+/* workspace.js: project shell, workflow page, documents list and settings.
+   Loaded by index.html before the app bootstrap. */
+
+const projectTabs = [
+  ["workflow", "工作流"],
+  ["materials", "资料"],
+  ["outputs", "文档"],
+  ["settings", "设置"],
+];
+// Old tab ids still used by feature modules map onto the new four-tab layout.
+const tabAliases = { overview: "workflow", tasks: "workflow", context: "settings", versions: "settings", conditions: "settings" };
+const settingsSectionFor = { context: "context", versions: "versions", conditions: "conditions" };
+let settingsSection = "context";
+
+function normalizeTab() {
+  if (settingsSectionFor[tab]) settingsSection = settingsSectionFor[tab];
+  if (tabAliases[tab]) tab = tabAliases[tab];
+}
 
 function draw() {
+  normalizeTab();
   $("#projects").innerHTML =
     state.projects
       .map(
         (p) =>
-          `<button data-project="${E(p.id)}" class="${p.id === projectId ? "selected" : ""}">${E(p.name)}</button>`,
+          `<button data-project="${E(p.id)}" class="${p.id === projectId && !["capabilities", "trash"].includes(tab) ? "selected" : ""}" title="${E(p.name)}">${E(p.name)}</button>`,
       )
-      .join("") || "<small>创建你的第一个项目</small>";
-  $("#breadcrumb").textContent =
-    tab === "capabilities"
-      ? "工作空间 / 能力与工具"
-      : tab === "trash"
-        ? "工作空间 / 项目回收站"
-      : "工作空间 / " + (state.project?.name || "项目");
+      .join("") || "<small>还没有项目</small>";
+  $("#capabilities").classList.toggle("selected", tab === "capabilities");
+  $("#trash").classList.toggle("selected", tab === "trash");
   if (tab === "capabilities") return drawCapabilities();
   if (tab === "trash") return drawTrash();
   if (!state.project) {
     $("#content").innerHTML =
-      `<div class="empty"><div class="welcome-mark">P /</div><div class="eyebrow">从背景开始，向交付推进</div><h2>把你的产品工作接起来。</h2><p>创建一个项目，留下背景和已有资料。选择这次需要的交付物，后面的工作可以随时继续。</p><button class="primary" data-action="new">创建第一个项目</button><div class="help">已连接 ${state.runtime.knowledge_count} 份方法与模板 · 包含完整新品分析模板</div></div>`;
+      `<div class="empty"><h2>创建第一个项目</h2><p>一个项目对应一个产品。先写下背景，再导入竞品资料，按工作流逐步生成文档。</p><button class="primary" data-action="new">新建项目</button><p class="help">已连接 ${Number(state.runtime.knowledge_count || 0)} 份方法与模板</p></div>`;
     return;
   }
+  const counts = {
+    materials: (state.documents || []).filter((d) => d.kind === "upload").length,
+    outputs: (state.jobs || []).filter((j) => !j.archived).length,
+  };
+  const platform = state.project.platform ? platformLabels[state.project.platform] || state.project.platform : "";
   $("#content").innerHTML =
-    `<div class="heading"><div><div class="eyebrow">PROJECT WORKSPACE</div><h1>${E(state.project.name)}</h1><div class="chipline"><span class="tag">当前模式：${E(workflowNames[state.project.workflow_mode] || state.project.workflow_mode)}</span>${state.project.platform ? `<span class="tag">${E(platformLabels[state.project.platform] || state.project.platform)}</span>` : ""}</div><p>${E(state.project.brief || "先补充项目背景，让后续任务有依据。")}</p></div><div class="heading-tools"><div class="version-scope-card compact"><span>当前范围</span>${activeVersionSelect()}</div><div class="actions"><a class="button-link" href="/api/projects/${encodeURIComponent(projectId)}/export">导出完整项目</a><button class="primary" data-tab="tasks">开始一项任务 ↗</button></div></div></div><nav class="tabs" aria-label="工作区" role="tablist"><button role="tab" aria-selected="${tab === "overview"}" data-tab="overview" class="${tab === "overview" ? "active" : ""}">项目概览</button><button role="tab" aria-selected="${tab === "versions"}" data-tab="versions" class="${tab === "versions" ? "active" : ""}">产品版本</button><button role="tab" aria-selected="${tab === "context"}" data-tab="context" class="${tab === "context" ? "active" : ""}">项目背景</button>${state.project.workflow_mode === "full" ? `<button role="tab" aria-selected="${tab === "conditions"}" data-tab="conditions" class="${tab === "conditions" ? "active" : ""}">条件闭环</button>` : ""}<button role="tab" aria-selected="${tab === "materials"}" data-tab="materials" class="${tab === "materials" ? "active" : ""}">资料</button><button role="tab" aria-selected="${tab === "tasks"}" data-tab="tasks" class="${tab === "tasks" ? "active" : ""}">任务</button><button role="tab" aria-selected="${tab === "outputs"}" data-tab="outputs" class="${tab === "outputs" ? "active" : ""}">交付物</button></nav><div id="view" role="tabpanel"></div>`;
-  if (tab === "conditions" && state.project.workflow_mode !== "full") tab = "overview";
-  (
-    ({
-      overview: drawOverview,
-      versions: drawVersions,
-      context: drawContext,
-      conditions: drawConditions,
-      materials: drawMaterials,
-      tasks: drawTasks,
-      outputs: drawOutputs,
-    })[tab] || drawOverview
-  )();
+    `<div class="project-header"><div class="project-header-row"><div class="project-title"><h1>${E(state.project.name)}</h1>${platform ? `<span class="tag">${E(platform)}</span>` : ""}<span class="tag">${E(workflowNames[state.project.workflow_mode] || state.project.workflow_mode)}</span></div><div class="project-tools">${activeVersionSelect()}<button class="primary" data-tab="workflow">开始任务</button></div></div><nav class="tabs" aria-label="工作区" role="tablist">${projectTabs.map(([id, label]) => `<button role="tab" aria-selected="${tab === id}" data-tab="${id}" class="${tab === id ? "active" : ""}">${label}${counts[id] ? ` <span class="tab-count">${counts[id]}</span>` : ""}</button>`).join("")}</nav></div><div id="view" role="tabpanel"></div>`;
+  (({ workflow: drawTasks, materials: drawMaterials, outputs: drawOutputs, settings: drawSettings })[tab] || drawTasks)();
+}
+
+/* ---------- Status helpers ---------- */
+
+function jobState(job) {
+  if (!job) return { label: "未开始", cls: "", icon: "" };
+  if (job.review_decision === "accepted") return { label: "已确认", cls: "ok", icon: "done" };
+  if (job.review_decision === "changes_requested") return { label: "需修改", cls: "warn", icon: "review" };
+  return {
+    prepared: { label: "待执行", cls: "", icon: "ready" },
+    queued: { label: "排队中", cls: "run", icon: "run" },
+    running: { label: "生成中", cls: "run", icon: "run" },
+    completed: { label: "待评审", cls: "warn", icon: "review" },
+    failed: { label: "失败", cls: "bad", icon: "bad" },
+    cancelled: { label: "已取消", cls: "", icon: "" },
+    interrupted: { label: "已中断", cls: "bad", icon: "bad" },
+  }[job.status] || { label: job.status, cls: "", icon: "" };
+}
+
+function stateTag(info) {
+  return `<span class="tag ${info.cls}">${E(info.label)}</span>`;
+}
+
+function taskIcon(info) {
+  return `<span class="task-icon ${info.icon}" aria-hidden="true">${info.icon === "done" ? "✓" : info.icon === "bad" ? "!" : ""}</span>`;
+}
+
+function allTaskDefs() {
+  return state.packs.filter((pack) => pack.enabled).flatMap((pack) => pack.tasks)
+    .filter((task) => !task.modes || task.modes.includes(state.project.workflow_mode));
 }
 
 function jobRows(jobs) {
   return (
     jobs
-      .map(
-        (j) =>
-          `<div class="row ${j.archived ? "archived-row" : ""}"><div class="row-main"><h3>${E(j.title)}${j.revision_number > 1 ? ` · 修订 V${j.revision_number}` : ""}</h3><p>${date(j.created)} · ${E(workflowNames[j.workflow_mode] || j.workflow_mode)}${j.parent_job_id ? ` · 修订自上一任务 V${j.source_version || 1}` : ""} · ${E(j.error || "执行记录与引用资料可追溯")}</p><div class="chipline"><span class="tag">${E(scopeLabel(j))}</span>${j.is_latest ? '<span class="tag">当前分支最新版</span>' : '<span class="tag">已有后续修订</span>'}${j.archived ? '<span class="tag">已归档</span>' : ""}</div></div>${badge(j.review_decision === "accepted" ? "已确认" : j.review_decision === "changes_requested" ? "需修改" : j.status)}<button class="small" aria-label="查看 ${E(j.title)}，${E(workflowNames[j.workflow_mode] || j.workflow_mode)}，${date(j.created)}" data-job="${E(j.id)}">查看</button></div>`,
-      )
+      .map((j) => {
+        const info = jobState(j);
+        return `<div class="row ${j.archived ? "archived-row" : ""}"><div class="row-main"><h3>${E(j.title)}${j.revision_number > 1 ? ` · 修订 V${j.revision_number}` : ""}</h3><p>${date(j.created)} · ${E(scopeLabel(j))}${j.is_latest ? "" : " · 已有后续修订"}${j.error ? ` · ${E(j.error)}` : ""}</p></div>${stateTag(info)}<button class="small" aria-label="查看 ${E(j.title)}" data-job="${E(j.id)}">打开</button></div>`;
+      })
       .join("") ||
-    '<div class="empty">暂时没有记录。按你当前需要，开始一项任务。</div>'
+    '<div class="empty compact">暂时没有记录。</div>'
   );
 }
 
@@ -57,56 +95,110 @@ function filteredJobs() {
   if (outputFilter === "archived") return jobs.filter((j) => j.archived);
   if (outputFilter === "latest") return jobs.filter((j) => !j.archived && j.is_latest);
   if (outputFilter === "attention")
-    return jobs.filter((j) => !j.archived && (["failed", "interrupted"].includes(j.status) || j.review_decision === "changes_requested"));
+    return jobs.filter((j) => !j.archived && (["failed", "interrupted"].includes(j.status) || j.review_decision === "changes_requested" || (j.status === "completed" && !j.review_decision)));
   if (outputFilter === "accepted") return jobs.filter((j) => !j.archived && j.review_decision === "accepted");
   return jobs.filter((j) => !j.archived && j.status === outputFilter);
 }
 
-function drawOverview() {
-  const docs = state.documents,
-    jobs = state.jobs;
-  $("#view").innerHTML =
-    `<div class="grid"><div class="card hero"><div class="eyebrow">这次，要完成什么？</div><h2>一次推进一项工作，<br>留下可以继续用的成果。</h2><p>${state.project.workflow_mode === "fast" ? "按当前阶段进入：市场竞品、原型与说明、初审修改、终审整理或需求评审。已有原型和文档可以直接接着做；规则、流程、PRD 和验收用例按本轮需要准备。" : "完整模式保留完整研究深度和条件管理。"}</p><button data-tab="tasks">选择工作流 →</button></div><div class="card"><h3>当前工作</h3><p>${E(state.context.working || "还没有记录当前目标。可以写下这周要解决的问题、已确定的方向和暂时不做的事。")}</p><button class="small" data-tab="context">维护项目上下文</button><div class="help">下游任务优先使用当前范围内最新已确认的交付物。已有新版待确认时，旧稿不会自动替它做决定。</div></div></div><div class="stats"><div class="stat"><b>${docs.filter((d) => d.kind === "upload").length}</b><span>已导入资料</span></div><div class="stat"><b>${jobs.filter((j) => !j.archived && (j.status === "completed" || j.review_decision === "accepted")).length}</b><span>已完成任务</span></div><div class="stat"><b>${docs.filter((d) => d.kind === "accepted").length}</b><span>已确认交付物</span></div></div><div class="section-title"><h2>最近的工作</h2><button class="small" data-tab="outputs">全部记录</button></div><div class="card">${jobRows(jobs.filter((j) => !j.archived).slice(0, 4))}</div>`;
+/* ---------- Workflow (default project page) ---------- */
+
+function defaultWorkflowId(workflows) {
+  const stored = localStorage.getItem(`workbench-workflow:${projectId}`);
+  if (workflows.some((item) => item.id === stored)) return stored;
+  return workflows[0]?.id || null;
 }
 
-function drawContext() {
-  $("#view").innerHTML =
-    `${state.mode_mismatch_count ? `<div class="banner">有 ${state.mode_mismatch_count} 个历史任务使用了与当前项目不同的工作流模式。历史任务不会被修改；任务记录会显示它生成时的模式。</div>` : ""}<form id="context-form"><div class="grid"><div class="card context-card"><div class="eyebrow">01 / 长期背景</div><h2>这个项目是什么</h2><p>目标用户、地区、技术约束和长期决策。</p><textarea id="foundation" maxlength="12000" aria-label="长期背景" placeholder="目标用户：\n地区：\n技术约束：\n长期决策：">${E(state.context.foundation)}</textarea><small>每次任务自动带入；不知道的内容可以暂留空。</small></div><div class="card context-card"><div class="eyebrow">02 / 当前工作</div><h2>现在推进到哪里</h2><p>当前目标、已确认决策、正在解决的问题。</p><textarea id="working" maxlength="12000" aria-label="当前工作" placeholder="当前目标：\n已确认决策：\n待解决问题：\n本轮不做：">${E(state.context.working)}</textarea><small>迭代变化时更新；执行过的任务仍保留当时快照。</small></div></div><div class="grid"><div><label for="workflow-mode">工作流模式</label><select id="workflow-mode"><option value="fast" ${state.project.workflow_mode === "fast" ? "selected" : ""}>快速迭代（默认）</option><option value="full" ${state.project.workflow_mode === "full" ? "selected" : ""}>完整研究</option></select></div><div><label for="platform">目标平台（可选）</label><select id="platform">${platformSelect(state.project.platform)}</select></div></div><label for="brief">项目简介</label><textarea id="brief" maxlength="12000">${E(state.project.brief)}</textarea><div id="mode-help" class="help">目标平台可选：Android、iOS 或双平台；不确定时可选择“未指定”。验证周期和团队资源不再作为项目输入项。切换模式只影响之后准备的新任务；历史任务继续保留生成时的模式和输入快照。</div><button class="primary" type="submit">保存项目背景</button></form><section class="danger-zone"><div><h2>删除项目</h2><p>项目将从工作台移入回收站，之后可以恢复。</p></div><button class="danger" data-action="delete-project">删除这个项目</button></section>`;
-  $("#workflow-mode").onchange = () => {
-    $("#mode-help").textContent = `保存后只影响新任务。已有 ${state.jobs.length} 个历史任务仍保留各自的生成模式。`;
+function workflowTaskRow(task, taskKey, opts = {}) {
+  const job = scopedTaskJobs(taskKey)[0];
+  const info = job ? jobState(job) : opts.blocked ? { label: "等待前置", cls: "", icon: "" } : { label: "可开始", cls: "", icon: "ready" };
+  const prepareLabel = job ? (job.review_decision === "accepted" ? "生成新版" : "重新准备") : "准备";
+  const actions = job
+    ? `<button class="small" data-job="${E(job.id)}">打开</button>${job.review_decision === "accepted" || ["failed", "cancelled"].includes(job.status) ? `<button class="small ghost" data-task="${E(taskKey)}">${prepareLabel}</button>` : ""}`
+    : `<button class="small ${opts.blocked ? "" : "primary"}" data-task="${E(taskKey)}" ${opts.blocked || !task ? "disabled" : ""}>准备</button>`;
+  return `<div class="task-row ${opts.sub ? "sub" : ""}">${taskIcon(info)}<div class="row-main"><h3>${E(opts.name || task?.name || taskKey)}${opts.optional ? ' <span class="tag">按需</span>' : ""}</h3>${opts.description ? `<p title="${E(opts.description)}">${E(opts.description)}</p>` : ""}</div><span class="task-state">${stateTag(info)}</span><div class="task-actions">${actions}</div></div>`;
+}
+
+function drawTasks() {
+  const allTasks = allTaskDefs();
+  const workflows = state.workflows || [];
+  if (!workflows.some((item) => item.id === activeWorkflow)) activeWorkflow = defaultWorkflowId(workflows);
+  const workflow = workflows.find((item) => item.id === activeWorkflow);
+  const mismatch = state.mode_mismatch_count ? `<div class="banner">有 ${state.mode_mismatch_count} 个历史任务由另一工作流模式生成，下方只列出当前模式可新建的任务。</div>` : "";
+  const standalone = allTasks.filter((task) => !task.hidden);
+  const standaloneMarkup = `<details class="standalone-tasks"><summary>单项任务（不按工作流，直接生成某一份文档）</summary><div class="standalone-grid">${standalone.map((task) => `<article class="card"><h3>${E(task.name)}</h3><p>${E(task.description)}</p><footer><button class="small" data-task="${E(task.key)}">准备</button></footer></article>`).join("")}</div></details>`;
+  const switcher = workflows.length > 1 ? `<label class="workflow-switch inline-filter" for="workflow-select">工作流<select id="workflow-select">${workflows.map((item) => `<option value="${E(item.id)}" ${item.id === activeWorkflow ? "selected" : ""}>${E(item.name)}</option>`).join("")}</select></label>` : "";
+  if (!workflow) {
+    $("#view").innerHTML = `${mismatch}<div class="empty compact">当前模式没有预设工作流，请直接选择单项任务。</div>${standaloneMarkup}${statusStrip()}`;
+    return;
+  }
+  const stages = workflow.stages || [];
+  const stepsForStage = (stageId) => workflow.steps.filter((step) => step.stage === stageId);
+  const stageDone = (stageId) => {
+    const required = stepsForStage(stageId).filter((step) => !step.optional);
+    return required.length > 0 && required.every((step) => taskIsCurrentConfirmed(step.task));
   };
-  $("#context-form").onsubmit = async (e) => {
-    e.preventDefault();
-    try {
-      await api("/api/context", {
-        project_id: projectId,
-        foundation: $("#foundation").value,
-        working: $("#working").value,
-      });
-      await api("/api/project/update", {
-        id: projectId,
-        brief: $("#brief").value,
-        workflow_mode: $("#workflow-mode").value,
-        platform: $("#platform").value,
-      });
-      await refresh();
-      toast("项目背景已保存");
-    } catch (e) {
-      error(e);
+  if (stages.length && !stages.some((stage) => stage.id === activeWorkflowStage)) {
+    activeWorkflowStage = (stages.find((stage) => !stageDone(stage.id)) || stages[0]).id;
+  }
+  const selectedStage = stages.find((stage) => stage.id === activeWorkflowStage);
+  const visibleSteps = selectedStage ? stepsForStage(selectedStage.id) : workflow.steps;
+  const stepper = stages.length ? `<nav class="stepper" aria-label="工作阶段">${stages.map((stage, index) => {
+    const steps = stepsForStage(stage.id);
+    const confirmed = steps.filter((step) => taskIsCurrentConfirmed(step.task)).length;
+    const done = stageDone(stage.id);
+    return `<button class="${stage.id === activeWorkflowStage ? "selected" : ""} ${done ? "done" : ""}" data-workflow-stage="${E(stage.id)}" aria-current="${stage.id === activeWorkflowStage ? "step" : "false"}"><span class="step-num">${done ? "✓" : index + 1}</span><span class="step-text"><strong>${E(stage.name)}</strong><small>${confirmed}/${steps.length} 已确认</small></span></button>`;
+  }).join("")}</nav>${selectedStage?.description ? `<p class="stage-intro">${E(selectedStage.description)}</p>` : ""}` : "";
+  const rows = visibleSteps.map((step) => {
+    const task = allTasks.find((item) => item.key === step.task);
+    if (task?.assembly === "accepted_sections" && task.section_tasks?.length) {
+      const chapterJobs = task.section_tasks.map((key) => scopedTaskJobs(key)[0]);
+      const acceptedCount = chapterJobs.filter((job) => job?.review_decision === "accepted").length;
+      const allAccepted = acceptedCount === task.section_tasks.length;
+      const finalJob = scopedTaskJobs(step.task)[0];
+      const latestChapterTime = Math.max(0, ...chapterJobs.map((job) => Date.parse(job?.review_created || job?.updated || job?.created || 0) || 0));
+      const stale = Boolean(finalJob && latestChapterTime > (Date.parse(finalJob.created || 0) || 0));
+      const done = taskIsCurrentConfirmed(step.task);
+      const headInfo = done ? { label: "已确认", cls: "ok", icon: "done" } : stale ? { label: "需重新合并", cls: "warn", icon: "review" } : finalJob ? jobState(finalJob) : { label: `${acceptedCount}/${task.section_tasks.length} 章已确认`, cls: "", icon: acceptedCount ? "ready" : "" };
+      const headActions = `${finalJob ? `<button class="small" data-job="${E(finalJob.id)}">打开完整版</button>` : ""}${allAccepted && (!done || stale) ? `<button class="small primary" data-f1-assemble="${E(step.task)}">${finalJob ? "重新合并" : "合并五章"}</button>` : ""}`;
+      const head = `<div class="task-row group-head">${taskIcon(headInfo)}<div class="row-main"><h3>${E(step.name || task.name)}</h3><p>分 5 章逐章生成和确认；合并只统一编号和顺序，不调用模型重写。</p></div><span class="task-state">${stateTag(headInfo)}</span><div class="task-actions">${headActions}</div></div>`;
+      const chapters = task.section_tasks.map((key) => {
+        const chapter = allTasks.find((item) => item.key === key);
+        const ready = (chapter?.required_upstream_all || []).every((upstream) => scopedTaskJobs(upstream)[0]?.review_decision === "accepted");
+        return workflowTaskRow(chapter, key, { sub: true, blocked: !ready, description: chapter?.description });
+      }).join("");
+      return head + chapters;
     }
+    return workflowTaskRow(task, step.task, { name: step.name, description: step.description, optional: step.optional });
+  }).join("");
+  $("#view").innerHTML = `${mismatch}<div class="workflow-head"><div><h2>${E(workflow.name)}</h2><p>${E(workflow.prompt || workflow.description || "")}</p></div>${switcher}</div>${stepper}<div class="task-list">${rows || '<div class="empty compact">这个阶段没有任务。</div>'}</div>${standaloneMarkup}${statusStrip()}`;
+  const select = $("#workflow-select");
+  if (select) select.onchange = () => {
+    activeWorkflow = select.value;
+    activeWorkflowStage = null;
+    localStorage.setItem(`workbench-workflow:${projectId}`, activeWorkflow);
+    drawTasks();
   };
 }
 
-function drawConditions() {
-  const items = state.conditions || [];
-  $("#view").innerHTML =
-    `<div class="section-title"><div><h2>条件闭环</h2><p class="muted">每项条件都必须有 Owner、截止时间、阻塞范围和关闭证据。</p></div><button class="primary" data-action="new-condition">＋ 新增条件</button></div><div class="card">${items
-      .map(
-        (c) =>
-          `<div class="row"><div class="row-main"><h3>${E(c.title)}</h3><p>${E(c.owner)} · 截止 ${E(c.due)} · 复核 ${E(c.review_date || c.due)} · ${E(blockNames[c.block_level])}</p><div class="chipline"><span class="tag ${["open", "in_progress", "waiting_evidence"].includes(c.status) ? "warn" : ""}">${E(conditionNames[c.status])}</span>${c.evidence ? `<span class="tag">已有证据</span>` : ""}</div></div><button class="small" data-condition="${E(c.id)}">查看/更新</button></div>`,
-      )
-      .join("") || '<div class="empty">暂时没有条件。F3 输出中的硬阻塞应在这里登记并持续关闭。</div>'}</div><div class="help">只有已关闭或已豁免的条件才算完成；关闭和豁免必须填写证据或决策记录。条件会自动进入之后生成的任务包。</div>`;
+function statusStrip() {
+  const docs = state.documents || [], jobs = (state.jobs || []).filter((j) => !j.archived);
+  const pendingScrapes = (state.scrapes || []).filter((item) => item.status === "ready").length;
+  const runningScrapes = (state.scrapes || []).filter((item) => ["queued", "running"].includes(item.status)).length;
+  const running = jobs.filter((j) => ["queued", "running"].includes(j.status)).length;
+  const toReview = jobs.filter((j) => j.status === "completed" && !j.review_decision).length;
+  const items = [
+    `<span><b>${docs.filter((d) => d.kind === "upload").length}</b>份资料</span>`,
+    `<span><b>${docs.filter((d) => d.kind === "accepted").length}</b>份已确认文档</span>`,
+    toReview ? `<button data-tab="outputs" data-output-filter="attention"><b>${toReview}</b>份待评审</button>` : "",
+    running ? `<span><b>${running}</b>个生成中</span>` : "",
+    pendingScrapes ? `<button data-tab="materials"><b>${pendingScrapes}</b>份采集待确认入库</button>` : "",
+    runningScrapes ? `<span><b>${runningScrapes}</b>个采集进行中</span>` : "",
+  ].filter(Boolean);
+  const working = state.context?.working ? `<span title="${E(state.context.working)}">当前工作：${E(state.context.working.split("\n")[0].slice(0, 60))}</span>` : `<button data-tab="settings">补充当前工作背景 →</button>`;
+  return `<div class="status-strip">${items.join("")}${working}</div>`;
 }
+
+/* ---------- Materials ---------- */
 
 function drawMaterials() {
   return drawCompetitorDossiers();
@@ -279,77 +371,93 @@ function drawCommonProjectMaterials(target = "#project-public-materials") {
   };
 }
 
-function drawTasks() {
-  const allTasks = state.packs
-    .filter((pack) => pack.enabled)
-    .flatMap((pack) => pack.tasks)
-    .filter((task) => !task.modes || task.modes.includes(state.project.workflow_mode));
-  const tasks = allTasks.filter((task) => !task.hidden);
-  const workflows = state.workflows || [];
-  const workflow = workflows.find((item) => item.id === activeWorkflow);
-  const active = currentVersion();
-  const scope = `<div class="version-scope-card"><span>本次任务归属</span>${activeVersionSelect()}<button class="small" data-tab="versions">管理版本</button></div>`;
-  const mismatch = state.mode_mismatch_count ? `<div class="banner">当前项目是“${E(workflowNames[state.project.workflow_mode])}”，历史任务可能由另一模式生成。下面只显示当前模式可新建的任务。</div>` : "";
-  if (workflow) {
-    const stages = workflow.stages || [];
-    if (!stages.some((stage) => stage.id === activeWorkflowStage)) activeWorkflowStage = stages[0]?.id || null;
-    const selectedStage = stages.find((stage) => stage.id === activeWorkflowStage);
-    const visibleSteps = selectedStage ? workflow.steps.filter((step) => step.stage === selectedStage.id) : workflow.steps;
-    const stageNavigation = stages.length ? `<nav class="workflow-stage-nav" aria-label="工作阶段">${stages.map((stage, index) => {
-      const stageSteps = workflow.steps.filter((step) => step.stage === stage.id);
-      const confirmed = stageSteps.filter((step) => taskIsCurrentConfirmed(step.task)).length;
-      return `<button class="workflow-stage-tab ${stage.id === activeWorkflowStage ? "selected" : ""}" data-workflow-stage="${E(stage.id)}" aria-current="${stage.id === activeWorkflowStage ? "step" : "false"}"><span class="stage-number">${index + 1}</span><span><strong>${E(stage.name)}</strong><small>${confirmed ? `${confirmed} 项资料已确认` : "可直接进入"}</small></span></button>`;
-    }).join("")}</nav><div class="workflow-stage-intro"><h3>${E(selectedStage?.name || "")}</h3><p>${E(selectedStage?.description || "")}</p></div>` : "";
-    const steps = visibleSteps.map((step, index) => {
-      const task = allTasks.find((item) => item.key === step.task);
-      if (task?.assembly === "accepted_sections" && task.section_tasks?.length) {
-        const scopedJobs = (taskKey) => scopedTaskJobs(taskKey);
-        const chapterRows = task.section_tasks.map((taskKey, chapterIndex) => {
-          const chapter = allTasks.find((item) => item.key === taskKey);
-          const job = scopedJobs(taskKey)[0];
-          const dependenciesReady = (chapter?.required_upstream_all || []).every((upstreamKey) => scopedJobs(upstreamKey)[0]?.review_decision === "accepted");
-          const status = job?.review_decision === "accepted" ? "已确认" : job?.review_decision === "changes_requested" ? "需修改" : job?.status === "completed" ? "待评审" : job ? ({prepared: "待执行", queued: "排队中", running: "生成中", failed: "失败", cancelled: "已取消", interrupted: "已中断"}[job.status] || job.status) : dependenciesReady ? "可开始" : "等待前章";
-          const actions = job
-            ? `<button class="small" data-job="${E(job.id)}">查看</button>${job.review_decision === "accepted" ? `<button class="small" data-task="${E(taskKey)}">生成新版</button>` : ""}`
-            : `<button class="primary small" data-task="${E(taskKey)}" ${dependenciesReady ? "" : "disabled"}>准备本章</button>`;
-          return `<div class="f1-chapter ${job?.review_decision === "accepted" ? "accepted" : ""}"><div class="chapter-index">${chapterIndex + 1}</div><div class="row-main"><div class="chipline"><h4>${E(chapter?.name || taskKey)}</h4><span class="tag">${E(status)}</span></div><p>${E(chapter?.description || "")}</p></div><div class="chapter-actions">${actions}</div></div>`;
-        }).join("");
-        const chapterJobs = task.section_tasks.map((taskKey) => scopedJobs(taskKey)[0]);
-        const allAccepted = chapterJobs.every((job) => job?.review_decision === "accepted");
-        const finalJob = scopedJobs(step.task)[0];
-        const latestChapterTime = Math.max(0, ...chapterJobs.map((job) => Date.parse(job?.review_created || job?.updated || job?.created || 0) || 0));
-        const finalTime = Date.parse(finalJob?.created || 0) || 0;
-        const stale = Boolean(finalJob && latestChapterTime > finalTime);
-        const done = taskIsCurrentConfirmed(step.task);
-        const finalStatus = done ? "完整 F1 已确认" : stale ? "章节已更新，需重新合并" : finalJob ? "完整 F1 待检查" : allAccepted ? "5 章已确认，可合并" : "按顺序完成各章";
-        const finalActions = `${finalJob ? `<button class="small" data-job="${E(finalJob.id)}">查看完整 F1</button>` : ""}${allAccepted && (!done || stale) ? `<button class="primary small" data-f1-assemble="${E(step.task)}">${finalJob ? "重新合并" : "合并完整 F1"}</button>` : ""}`;
-        return `<article class="workflow-step f1-workflow-group ${done ? "done" : ""}"><div class="step-index">${String(index + 1).padStart(2, "0")}</div><div class="row-main"><div class="chipline"><h3>${E(step.name)}</h3>${done ? '<span class="tag">当前范围已确认</span>' : ""}</div><p>分 5 章逐步生成、编辑和确认；后一章只使用已确认的前文。</p><div class="f1-chapter-list">${chapterRows}</div><div class="f1-assembly"><div><strong>${E(finalStatus)}</strong><small>合并只统一来源编号和章节顺序，不调用模型重写正文。</small></div><div class="actions">${finalActions}</div></div></div></article>`;
-      }
-      const done = taskIsCurrentConfirmed(step.task);
-      const latest = scopedTaskJobs(step.task)[0];
-      return `<article class="workflow-step ${done ? "done" : ""}"><div class="step-index">${String(index + 1).padStart(2, "0")}</div><div class="row-main"><div class="chipline"><h3>${E(step.name)}</h3>${step.optional ? '<span class="tag">按需</span>' : ""}${done ? '<span class="tag">当前资料已确认</span>' : ""}</div><p>${E(step.description)}</p></div><div class="workflow-step-actions">${latest ? `<button class="small" data-job="${E(latest.id)}">查看当前稿</button>` : ""}<button class="primary small" data-task="${E(step.task)}" ${task ? "" : "disabled"}>${latest ? "准备新版" : "准备任务"}</button></div></article>`;
-    }).join("");
-    $("#view").innerHTML = `${mismatch}${scope}<div class="section-title"><div><button class="small" data-workflow-back>← 返回全部工作流</button><h2>${E(workflow.name)}</h2><p class="muted">${E(workflow.prompt)}</p></div><span class="tag">${active ? E(active.name) : "产品级"}</span></div>${stageNavigation}<div class="workflow-steps">${steps}</div><div class="help">${stages.length ? "已有原型、PRD 或评审意见时，可直接选择对应阶段。资料确认用于后续任务引用，实际初审、终审和需求评审结论仍以评审人的决定为准。" : "按本轮目标选择任务；按需项可以跳过，已有资料可直接作为本轮输入。"}</div>`;
-    return;
-  }
-  activeWorkflow = null;
-  const workflowCards = workflows.map((item) => `<article class="card workflow-card"><div class="eyebrow">WORKFLOW</div><h3>${E(item.name)}</h3><p>${E(item.description)}</p><div class="workflow-preview">${(item.stages?.length ? item.stages : item.steps).map((step) => `<span>${E(step.name)}${step.optional && !step.name.includes("可选") ? "（可选）" : ""}</span>`).join("<b>→</b>")}</div><button class="primary" data-workflow="${E(item.id)}">进入工作流 →</button></article>`).join("");
-  const taskCards = tasks.map((task) => `<article class="card task-card compact-task"><h3>${E(task.name)}</h3><p>${E(task.description)}</p><footer><span>中文 Markdown</span><button class="small" data-task="${E(task.key)}">单独准备</button></footer></article>`).join("");
-  $("#view").innerHTML = `${mismatch}${scope}<div class="section-title"><div><h2>选择工作流</h2><p class="muted">按你现在要做的事进入；新品、版本、竞品和复盘互不强制串联。</p></div></div><div class="grid workflow-grid">${workflowCards || '<div class="empty">当前模式没有预设工作流，请直接选择单项任务。</div>'}</div><details class="standalone-tasks"><summary>也可以直接选择单项交付物</summary><div class="grid">${taskCards}</div></details><div class="help">先生成可检查的任务包；确认资料、模板和目标后再启动模型。产品版本是可选归类，不会阻止你直接开始。</div>`;
-}
+/* ---------- Documents ---------- */
+
+const outputFilters = [
+  ["latest", "最新版"],
+  ["attention", "需处理"],
+  ["accepted", "已确认"],
+  ["all", "全部"],
+  ["archived", "已归档"],
+];
 
 function drawOutputs() {
-  $("#view").innerHTML =
-    `<div class="section-title"><div><h2>任务与交付记录</h2><p class="muted">修订关系、生成时模式和历史执行都会保留。</p></div><label class="inline-filter" for="output-filter">显示<select id="output-filter"><option value="latest" ${outputFilter === "latest" ? "selected" : ""}>各分支最新版</option><option value="all" ${outputFilter === "all" ? "selected" : ""}>全部未归档</option><option value="attention" ${outputFilter === "attention" ? "selected" : ""}>需要处理</option><option value="accepted" ${outputFilter === "accepted" ? "selected" : ""}>已确认</option><option value="prepared" ${outputFilter === "prepared" ? "selected" : ""}>待执行</option><option value="completed" ${outputFilter === "completed" ? "selected" : ""}>待评审</option><option value="archived" ${outputFilter === "archived" ? "selected" : ""}>已归档</option></select></label></div><div class="card">${jobRows(filteredJobs())}</div>`;
-  $("#output-filter").onchange = (event) => {
-    outputFilter = event.target.value;
-    drawOutputs();
+  const jobs = filteredJobs();
+  const count = (id) => { const keep = outputFilter; outputFilter = id; const n = filteredJobs().length; outputFilter = keep; return n; };
+  const rows = jobs.map((j) => {
+    const info = jobState(j);
+    return `<tr data-job-row="${E(j.id)}" class="${j.archived ? "archived-row" : ""}"><td><span class="doc-name">${E(j.title)}${j.revision_number > 1 ? ` · 修订 V${j.revision_number}` : ""}</span><span class="doc-sub">${E(scopeLabel(j))}${j.is_latest ? "" : " · 已有后续修订"}${j.error ? ` · ${E(j.error)}` : ""}</span></td><td>${stateTag(info)}</td><td class="num">${E(workflowNames[j.workflow_mode] || j.workflow_mode)}</td><td class="num">${date(j.created)}</td><td><button class="small" data-job="${E(j.id)}">打开</button></td></tr>`;
+  }).join("");
+  $("#view").innerHTML = `<div class="doc-toolbar"><div class="segmented" role="group" aria-label="筛选">${outputFilters.map(([id, label]) => `<button class="${outputFilter === id ? "active" : ""}" data-output-filter="${id}">${label} <span>${count(id)}</span></button>`).join("")}</div></div>${rows ? `<table class="doc-table"><thead><tr><th>文档</th><th class="col-state">状态</th><th class="col-mode">模式</th><th class="col-date">创建时间</th><th class="col-open"></th></tr></thead><tbody>${rows}</tbody></table>` : '<div class="list"><div class="empty compact">这个筛选下没有文档。</div></div>'}`;
+  $("#view").querySelectorAll("[data-job-row]").forEach((tr) => {
+    tr.onclick = async (event) => {
+      if (event.target.closest("button")) return;
+      try { showJob(await api("/api/jobs/" + tr.dataset.jobRow)); } catch (err) { error(err); }
+    };
+  });
+}
+
+/* ---------- Settings: context / versions / conditions / danger zone ---------- */
+
+function drawSettings() {
+  const sections = [["context", "项目背景"], ["versions", "产品版本"]];
+  if (state.project.workflow_mode === "full") sections.push(["conditions", "条件闭环"]);
+  if (!sections.some(([id]) => id === settingsSection)) settingsSection = "context";
+  $("#view").innerHTML = `<div class="settings-layout"><nav class="settings-nav" aria-label="设置">${sections.map(([id, label]) => `<button class="${settingsSection === id ? "active" : ""}" data-settings-section="${id}">${label}</button>`).join("")}</nav><div id="settings-body" class="settings-section"></div></div>`;
+  ({ context: drawContext, versions: drawVersions, conditions: drawConditions })[settingsSection]();
+}
+
+function drawContext() {
+  $("#settings-body").innerHTML =
+    `<h2>项目背景</h2><p class="muted">每次准备任务时自动带入。执行过的任务保留当时的快照，修改这里不会改写历史文档。</p>${state.mode_mismatch_count ? `<div class="banner">有 ${state.mode_mismatch_count} 个历史任务使用了与当前项目不同的工作流模式；它们保留生成时的模式。</div>` : ""}<form id="context-form"><div class="context-card"><label for="foundation">长期背景</label><textarea id="foundation" maxlength="12000" placeholder="目标用户：\n地区：\n技术约束：\n长期决策：">${E(state.context.foundation)}</textarea><small>目标用户、地区、技术约束和长期决策；不知道的可以留空。</small></div><div class="context-card"><label for="working">当前工作</label><textarea id="working" maxlength="12000" placeholder="当前目标：\n已确认决策：\n待解决问题：\n本轮不做：">${E(state.context.working)}</textarea><small>迭代变化时更新，工作流页底部会显示第一行。</small></div><label for="brief">项目简介</label><textarea id="brief" maxlength="12000">${E(state.project.brief)}</textarea><div class="field-grid"><div><label for="workflow-mode">工作流模式</label><select id="workflow-mode"><option value="fast" ${state.project.workflow_mode === "fast" ? "selected" : ""}>快速迭代（默认）</option><option value="full" ${state.project.workflow_mode === "full" ? "selected" : ""}>完整研究</option></select></div><div><label for="platform">目标平台</label><select id="platform">${platformSelect(state.project.platform)}</select></div></div><p id="mode-help" class="help">切换模式只影响之后新准备的任务。</p><div class="form-footer"><a class="button-link" href="/api/projects/${encodeURIComponent(projectId)}/export">导出完整项目包</a><button class="primary" type="submit">保存</button></div></form><section class="danger-zone"><div><h2>删除项目</h2><p>移入回收站，之后可以恢复。</p></div><button class="danger" data-action="delete-project">删除项目</button></section>`;
+  const form = $("#context-form");
+  const snapshot = () => ["foundation", "working", "brief", "workflow-mode", "platform"].map((id) => $("#" + id).value).join("\u0000");
+  const saved = snapshot();
+  form.dataset.dirtyGuard = "true";
+  form.isDirty = () => snapshot() !== saved;
+  $("#workflow-mode").onchange = () => {
+    $("#mode-help").textContent = `保存后只影响新任务；已有 ${state.jobs.length} 个历史任务保留各自的生成模式。`;
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    e.submitter.disabled = true;
+    try {
+      await api("/api/context", {
+        project_id: projectId,
+        foundation: $("#foundation").value,
+        working: $("#working").value,
+      });
+      await api("/api/project/update", {
+        id: projectId,
+        brief: $("#brief").value,
+        workflow_mode: $("#workflow-mode").value,
+        platform: $("#platform").value,
+      });
+      await refresh();
+      toast("项目背景已保存");
+    } catch (err) {
+      error(err);
+      e.submitter.disabled = false;
+    }
   };
 }
 
+function drawConditions() {
+  const items = state.conditions || [];
+  $("#settings-body").innerHTML =
+    `<div class="section-title flush"><div><h2>条件闭环</h2><p class="muted">每项条件需要 Owner、截止时间、阻塞范围和关闭证据。</p></div><button class="primary small" data-action="new-condition">＋ 新增条件</button></div><div class="list">${items
+      .map(
+        (c) =>
+          `<div class="row"><div class="row-main"><h3>${E(c.title)}</h3><p>${E(c.owner)} · 截止 ${E(c.due)} · 复核 ${E(c.review_date || c.due)} · ${E(blockNames[c.block_level])}</p></div><span class="tag ${["open", "in_progress", "waiting_evidence"].includes(c.status) ? "warn" : "ok"}">${E(conditionNames[c.status])}</span>${c.evidence ? '<span class="tag">有证据</span>' : ""}<button class="small" data-condition="${E(c.id)}">更新</button></div>`,
+      )
+      .join("") || '<div class="empty compact">暂时没有条件。F3 输出中的硬阻塞应在这里登记。</div>'}</div><p class="help">只有已关闭或已豁免的条件才算完成；条件会自动进入之后生成的任务包。</p>`;
+}
+
+/* ---------- Global pages ---------- */
+
 function drawTrash() {
   $("#content").innerHTML =
-    `<div class="heading"><div><div class="eyebrow">RECYCLE BIN</div><h1>项目回收站</h1><p>删除项目后，完整快照、资料和交付物保留在本机。恢复不会覆盖当前项目。</p></div><button data-tab="overview">返回项目</button></div><div class="card">${(state.trash || []).map((item) => `<div class="row"><div class="row-main"><h3>${E(item.name)}</h3><p>${item.deleted_at ? date(item.deleted_at) : "时间未知"} · ${item.document_count} 份资料 · ${item.job_count} 个任务${item.restored ? " · 已恢复，备份仍保留" : ""}</p></div><div class="actions">${item.restored ? "" : `<button class="primary small" data-trash-restore="${E(item.id)}">恢复项目</button>`}<button class="danger small" data-trash-delete="${E(item.id)}" data-trash-name="${E(item.name)}">永久删除</button></div></div>`).join("") || '<div class="empty">回收站是空的。</div>'}</div>`;
+    `<div class="page-header"><div><h1>回收站</h1><p>删除的项目在本机保留完整快照，恢复不会覆盖现有项目。</p></div><button data-tab="workflow">返回项目</button></div><div class="list">${(state.trash || []).map((item) => `<div class="row"><div class="row-main"><h3>${E(item.name)}</h3><p>${item.deleted_at ? date(item.deleted_at) : "时间未知"} · ${item.document_count} 份资料 · ${item.job_count} 个任务${item.restored ? " · 已恢复，备份仍保留" : ""}</p></div><div class="actions">${item.restored ? "" : `<button class="primary small" data-trash-restore="${E(item.id)}">恢复</button>`}<button class="danger small" data-trash-delete="${E(item.id)}" data-trash-name="${E(item.name)}">永久删除</button></div></div>`).join("") || '<div class="empty compact">回收站是空的。</div>'}</div>`;
 }
 
 function drawCapabilities() {
@@ -357,10 +465,10 @@ function drawCapabilities() {
     projectStats = state.runtime.project || {},
     lanhu = state.integrations?.lanhu || {};
   $("#content").innerHTML =
-    `<div class="heading"><div><div class="eyebrow">CAPABILITY LIBRARY</div><h1>让工作台随工作生长。</h1><p>启用能力后，项目中会出现对应任务。任务、资料和交付物仍使用同一套工作方式。</p></div><button data-tab="overview">返回项目</button></div><div class="grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag">${p.enabled ? "已启用" : "可启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.filter((t) => !t.hidden || t.assembly).map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用此能力" : "启用此能力"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="card">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.status === "manual" ? "warn" : ""}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}</div><div class="section-title"><h2>Lanhu MCP</h2></div><div class="card"><div class="row"><div class="row-main"><h3>蓝湖原型读取</h3><p>${E(lanhu.message || "尚未检测")}</p><p class="muted">配置来源：${E(lanhu.source || "本机 Codex 配置")} · 认证值不会显示或写入工作台。</p></div><span class="tag ${lanhu.ready ? "" : "warn"}">${lanhu.ready ? "配置可用" : "需要配置"}</span></div><div class="actions"><button class="primary small" data-action="lanhu-config">配置 / 重新检测</button><span class="help">未安装时请先安装 Node.js，再运行 npx -y mcp-lanhu；也可以继续上传截图或 PRD。</span></div></div><div class="section-title"><h2>运行环境</h2></div><div class="card"><p>生成模型：<span class="mono">${E(state.runtime.model)}</span></p><p>知识来源：${state.runtime.knowledge_count} 份已启用方法、模板与案例。</p><p>检索方式：${E(state.runtime.retrieval)}。</p><p>全局知识索引：${state.runtime.global_index ? `${globalStats.sources || 0} 个来源 / ${globalStats.chunks || 0} 个片段` : "未建立或当前不可用"}</p><p>项目隔离索引：${state.runtime.project_index ? `${projectStats.sources || 0} 份资料 / ${projectStats.chunks || 0} 个片段` : "将在首次检索时建立"}</p>${state.runtime.fallback ? '<div class="banner">Hybrid RAG 当前已自动回退关键词检索，不会阻断资料准备和文档生成。</div>' : ""}<div class="help">检索结果继续展示来源和原文，便于检查生成依据；向量 ID、内部得分和索引治理字段不会进入任务正文。扩展新工具仍需实现后端适配器，添加名字不会自动获得工具能力。</div></div>`;
-  const connectionNote = document.createElement("div");
+    `<div class="page-header"><div><h1>能力与工具</h1><p>启用能力后，项目里会出现对应任务。</p></div><button data-tab="workflow">返回项目</button></div><div class="pack-grid">${state.packs.map((p) => `<div class="card"><div class="pack-title"><h2>${E(p.name)}</h2><span class="tag ${p.enabled ? "ok" : ""}">${p.enabled ? "已启用" : "未启用"}</span></div><p class="muted">${E(p.description)}</p><div class="chipline">${p.tasks.filter((t) => !t.hidden || t.assembly).map((t) => `<span class="tag">${E(t.name)}</span>`).join("")}</div><button class="small" data-pack="${E(p.id)}" data-enabled="${!p.enabled}">${p.enabled ? "停用" : "启用"}</button></div>`).join("")}</div><div class="section-title"><h2>工具接入</h2></div><div class="list">${state.tools.map((t) => `<div class="row"><div class="row-main"><h3>${E(t.name)}</h3><p>${E(t.description)}</p></div><span class="tag ${t.id === "codex" ? (state.runtime.available ? "ok" : "bad") : t.status === "ready" ? "ok" : "warn"}">${t.id === "codex" ? (state.runtime.available ? "已找到 CLI" : "未找到 CLI") : t.status === "ready" ? "已接入" : "手动导入"}</span></div>`).join("")}<div class="row"><div class="row-main"><h3>蓝湖原型读取（Lanhu MCP）</h3><p>${E(lanhu.message || "尚未检测")} · 配置来源：${E(lanhu.source || "本机 Codex 配置")}</p></div><span class="tag ${lanhu.ready ? "ok" : "warn"}">${lanhu.ready ? "可用" : "需要配置"}</span><button class="small" data-action="lanhu-config">配置</button></div></div><div class="section-title"><h2>运行环境</h2></div><div class="card"><dl class="kv"><dt>生成模型</dt><dd class="mono">${E(state.runtime.model)}</dd><dt>知识来源</dt><dd>${Number(state.runtime.knowledge_count || 0)} 份方法、模板与案例</dd><dt>检索方式</dt><dd>${E(state.runtime.retrieval)}</dd><dt>全局知识索引</dt><dd>${state.runtime.global_index ? `${globalStats.sources || 0} 个来源 / ${globalStats.chunks || 0} 个片段` : "未建立或不可用"}</dd><dt>项目索引</dt><dd>${state.runtime.project_index ? `${projectStats.sources || 0} 份资料 / ${projectStats.chunks || 0} 个片段` : "首次检索时建立"}</dd></dl>${state.runtime.fallback ? '<div class="banner">Hybrid 检索不可用，已自动回退关键词检索。</div>' : ""}</div>`;
+  const connectionNote = document.createElement("p");
   connectionNote.className = state.runtime.codex_error ? "banner" : "help";
   connectionNote.textContent = state.runtime.codex_error ||
-    "找到 CLI 只表示本机可执行入口存在，不代表账号、模型与网络已通过真实生成测试。登录与认证由本机 Codex 管理；工作台不会复制凭据。";
+    "找到 CLI 只表示本机入口存在，不代表账号、模型和网络已通过真实生成测试。";
   $("#content").appendChild(connectionNote);
 }

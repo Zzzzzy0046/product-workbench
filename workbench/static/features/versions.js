@@ -54,7 +54,8 @@ function productVersionForm(item = {}) {
       setActiveVersion(saved.id);
       close();
       await refresh();
-      tab = "versions";
+      tab = "settings";
+      settingsSection = "versions";
       draw();
       toast(item.id ? "产品版本已更新" : `已创建并切换到 ${saved.name}`);
     } catch (err) {
@@ -67,5 +68,5 @@ function productVersionForm(item = {}) {
 function drawVersions() {
   const versions = state.versions || [];
   const active = currentVersion();
-  $("#view").innerHTML = `<div class="section-title"><div><h2>产品版本</h2><p class="muted">一个项目代表一个产品；产品版本代表一次发布或迭代。它与交付物自己的 V1、V2 修订记录不是同一件事。</p></div><button class="primary" data-action="new-version">＋ 新建版本</button></div><div class="version-scope-card"><span>当前工作范围</span>${activeVersionSelect()}</div><div class="card">${versions.map((item) => `<div class="row ${active?.id === item.id ? "selected-row" : ""}"><div class="row-main"><h3>${E(item.name)}</h3><p>${E(productVersionTypeNames[item.version_type] || item.version_type)} · ${E(productVersionStatusNames[item.status] || item.status)}${item.target_date ? ` · 目标 ${E(item.target_date)}` : ""}</p><p>${E(item.goal || "尚未填写版本目标")}</p><div class="chipline"><span class="tag">${item.document_count} 份资料</span><span class="tag">${item.job_count} 个任务</span>${active?.id === item.id ? '<span class="tag">当前版本</span>' : ""}</div></div><div class="actions"><button class="small" data-version-select="${E(item.id)}">切换到此版本</button><button class="small" data-version-edit="${E(item.id)}">编辑</button></div></div>`).join("") || '<div class="empty">还没有产品版本。新品分析可以先按产品级运行；进入具体迭代时再创建版本。</div>'}</div><div class="help">切换版本后，新上传资料、新采集评论和新建任务会默认归到当前版本。产品级资料仍可复用；其他版本资料只有被你显式勾选时才会进入本次任务。</div>`;
+  $("#settings-body").innerHTML = `<div class="section-title flush"><div><h2>产品版本</h2><p class="muted">一个项目是一个产品，产品版本是一次发布或迭代（与文档自己的 V1、V2 修订不同）。切换版本后，新资料、新采集和新任务默认归到该版本。</p></div><button class="primary small" data-action="new-version">＋ 新建版本</button></div><div class="list">${versions.map((item) => `<div class="row ${active?.id === item.id ? "selected-row" : ""}"><div class="row-main"><h3>${E(item.name)}${active?.id === item.id ? ' <span class="tag run">当前</span>' : ""}</h3><p>${E(productVersionTypeNames[item.version_type] || item.version_type)} · ${E(productVersionStatusNames[item.status] || item.status)}${item.target_date ? ` · 目标 ${E(item.target_date)}` : ""} · ${item.document_count} 份资料 · ${item.job_count} 个任务</p>${item.goal ? `<p>${E(item.goal)}</p>` : ""}</div><div class="actions">${active?.id === item.id ? "" : `<button class="small" data-version-select="${E(item.id)}">切换</button>`}<button class="small" data-version-edit="${E(item.id)}">编辑</button></div></div>`).join("") || '<div class="empty compact">还没有产品版本。新品分析可以先按产品级运行，进入具体迭代时再创建。</div>'}</div>`;
 }
