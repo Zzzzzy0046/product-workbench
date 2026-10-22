@@ -5,16 +5,32 @@ from workbench.services.base import BoundService
 
 
 class RetrievalService(BoundService):
+    def __init__(self, workbench):
+        super().__init__(workbench)
+        object.__setattr__(self, "_knowledge_cache", None)
+
     def knowledge(self):
+        """Active knowledge cards; parsing is cached by file mtime/size."""
         from product_kb.frontmatter import parse_markdown
-        result = []
-        for path in sorted((ROOT / "knowledge").rglob("*.md")):
-            if "00_inbox" in path.parts:
+        paths = [path for path in sorted((ROOT / "knowledge").rglob("*.md")) if "00_inbox" not in path.parts]
+        signature = []
+        for path in paths:
+            try:
+                stat = path.stat()
+            except OSError:
                 continue
+            signature.append((str(path), stat.st_mtime_ns, stat.st_size))
+        signature = tuple(signature)
+        cached = self._knowledge_cache
+        if cached and cached[0] == signature:
+            return [dict(item) for item in cached[1]]
+        result = []
+        for path in paths:
             meta, text = parse_markdown(path)
             if meta.get("status") != "active":
                 continue
             result.append({"id":meta.get("id", path.stem),"name":path.stem,"text":text,"path":str(path.relative_to(ROOT)),"kind":"knowledge"})
+        object.__setattr__(self, "_knowledge_cache", (signature, [dict(item) for item in result]))
         return result
 
     def _keyword_search(self, project_id, query, limit=8):

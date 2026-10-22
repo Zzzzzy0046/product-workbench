@@ -139,10 +139,12 @@ class FakeProcess:
 
 
 def prepare_runner(tmp_path, monkeypatch, **process_options):
-    job = {"id": "cli-boundary-job", "prompt": "生成中文文档，保留截图来源。", "status": "running"}
+    job = {"id": "cli-boundary-job", "project_id": "f" * 32, "prompt": "生成中文文档，保留截图来源。", "status": "running"}
     directory = tmp_path / "runs" / job["id"]
     directory.mkdir(parents=True)
-    image = directory / "source.png"
+    uploads = tmp_path / "uploads" / job["project_id"]
+    uploads.mkdir(parents=True)
+    image = uploads / "source.png"
     image.write_bytes(b"test-image")
     (directory / "执行记录.json").write_text(json.dumps({"model": "snapshot-model", "sources": [{"image_path": str(image)}, {"image_path": str(image)}]}), encoding="utf-8")
     host = SimpleNamespace(data=tmp_path, lock=threading.RLock(), processes={}, job=lambda _: job)

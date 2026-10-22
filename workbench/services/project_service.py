@@ -5,6 +5,11 @@ from workbench.services.base import BoundService
 
 
 class ProjectService(BoundService):
+    def __init__(self, workbench):
+        super().__init__(workbench)
+        # Trash metadata keyed by directory; invalidated by export mtime/size.
+        object.__setattr__(self, "_trash_cache", {})
+
     def project(self, project_id):
         rows = self.rows("SELECT * FROM projects WHERE id=?", (project_id,))
         if not rows:
@@ -157,7 +162,7 @@ class ProjectService(BoundService):
         trash_root = (self.data / "trash").resolve()
         if not trash_root.is_dir():
             return []
-        items = []
+        items, cache, seen = [], self._trash_cache, set()
         for directory in sorted(trash_root.iterdir(),reverse=True):
             if not directory.is_dir() or not directory.resolve().is_relative_to(trash_root):
                 continue
@@ -165,20 +170,36 @@ class ProjectService(BoundService):
             if not export.is_file():
                 continue
             try:
-                snapshot = json.loads(export.read_text(encoding="utf-8"))
-                project = snapshot["project"]
-            except (OSError,ValueError,KeyError,TypeError):
+                stat = export.stat()
+            except OSError:
                 continue
-            items.append({
-                "id": directory.name,
-                "project_id": project.get("id", ""),
-                "name": project.get("name", "未命名项目"),
-                "deleted_at": snapshot.get("deleted_at", ""),
-                "document_count": len(snapshot.get("documents", [])),
-                "job_count": len(snapshot.get("jobs", [])),
-                "version_count": len(snapshot.get("product_versions", [])),
-                "restored": (directory / "restored.json").is_file(),
-            })
+            # /api/state polls this list; full exports can be megabytes, so
+            # only re-read one when the file itself changed.
+            signature = (stat.st_mtime_ns, stat.st_size)
+            seen.add(directory.name)
+            cached = cache.get(directory.name)
+            if cached and cached[0] == signature:
+                metadata = cached[1]
+            else:
+                try:
+                    snapshot = json.loads(export.read_text(encoding="utf-8"))
+                    project = snapshot["project"]
+                    metadata = {
+                        "id": directory.name,
+                        "project_id": project.get("id", ""),
+                        "name": project.get("name", "未命名项目"),
+                        "deleted_at": snapshot.get("deleted_at", ""),
+                        "document_count": len(snapshot.get("documents", [])),
+                        "job_count": len(snapshot.get("jobs", [])),
+                        "version_count": len(snapshot.get("product_versions", [])),
+                    }
+                except (OSError,ValueError,KeyError,TypeError,AttributeError):
+                    cache.pop(directory.name, None)
+                    continue
+                cache[directory.name] = (signature, metadata)
+            items.append({**metadata, "restored": (directory / "restored.json").is_file()})
+        for stale in set(cache) - seen:
+            cache.pop(stale, None)
         return items
 
     def _trash_directory(self, trash_id):

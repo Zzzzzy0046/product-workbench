@@ -67,9 +67,8 @@ class CodexRunner(BoundService):
             raise ValueError("任务快照中的 Codex 模型名称无效，请重新准备任务。")
         if model:
             command += ["--model",model]
-        for image_path in dict.fromkeys(source.get("image_path", "") for source in snapshot.get("sources", [])):
-            if image_path and Path(image_path).is_file():
-                command += ["--image", image_path]
+        for image_path in self._snapshot_images(job, snapshot):
+            command += ["--image", image_path]
         command += ["-"]
         # No shell interpolation. Credentials stay in the CLI's existing auth store.
         with self.lock:
@@ -142,6 +141,30 @@ class CodexRunner(BoundService):
         if not output.is_file():
             raise ValueError("Codex 未生成最终文档。")
         return output.read_text(encoding="utf-8")
+
+    def _snapshot_images(self, job, snapshot):
+        """Only attach images stored in this job's own project upload folder.
+
+        Run snapshots can come from imported project packages, so their
+        ``image_path`` values are untrusted and must not reach arbitrary files.
+        """
+        project_id = str(job.get("project_id") or "")
+        if not ID_PATTERN.fullmatch(project_id):
+            return []
+        root = (self.data / "uploads" / project_id).resolve()
+        images = []
+        sources = snapshot.get("sources", [])
+        for source in sources if isinstance(sources, list) else []:
+            value = source.get("image_path", "") if isinstance(source, dict) else ""
+            if not value or not isinstance(value, str):
+                continue
+            try:
+                path = Path(value).resolve()
+            except (OSError, ValueError):
+                continue
+            if path.is_relative_to(root) and path.parent == root and path.suffix.lower() in IMAGE_SUFFIXES and path.is_file():
+                images.append(str(path))
+        return list(dict.fromkeys(images))
 
     @staticmethod
     def stop_process(process):

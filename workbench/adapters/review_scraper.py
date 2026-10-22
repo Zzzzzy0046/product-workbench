@@ -333,45 +333,47 @@ class ReviewScraperAdapter(BoundService):
         if date_from and date_to and date_from > date_to:
             raise ValueError("开始日期不能晚于结束日期。")
         review_filters = self._review_filter_request(payload)
-        if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1", (project_id,)):
-            raise ValueError("当前项目已有竞品采集任务执行中，请等待完成。")
-        # Validate the entire request before creating any dossier or batch.
-        if hasattr(self._workbench, "competitor_service"):
-            prepared_dossiers = [(entry, self.competitor_service.upsert(project_id, {
-                **entry, "title": selection.get("title") or entry["app_id"], "role": selection.get("role") or "", "note": selection.get("note") or ""}),
-                selection, listing, screenshots, reviews) for entry, _, selection, listing, screenshots, reviews in prepared_dossiers]
-        stamp = now()
-        scrape_ids = []
-        with self.db() as db:
-            for entry, competitor, selection, listing, screenshots, reviews in prepared_dossiers:
-                scrape_id = uid()
-                request = {
-                    **entry,
-                    "countries": countries,
-                    "requested_countries": requested_countries,
-                    "collection_scope": "global_multi_market" if "global" in requested_countries else "selected_markets",
-                    "count_per_country": min(100, count) if entry["platform"] == "app_store" else count,
-                    "sort": sort,
-                    "date_from": date_from,
-                    "date_to": date_to,
-                    "version_id": product_version["id"] if product_version else "",
-                    "collect_listing": listing or screenshots,
-                    "save_listing": listing,
-                    "download_screenshots": screenshots,
-                    "collect_reviews": reviews,
-                    "competitor_id": competitor["id"] if competitor else "",
-                    "translate": bool(payload.get("translate", True)) and reviews,
-                    "translation_batch_size": 20,
-                    "requires_confirmation": True,
-                    **review_filters,
-                }
-                if selection:
-                    request["selection"] = {key: selection[key] for key in ("platform", "app_id", "role", "note", "title", "query", "search_country", "lookup_country", "observed_countries") if key in selection}
-                db.execute(
-                    "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                    (scrape_id, project_id, entry["platform"], entry["app_id"], json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", product_version["id"] if product_version else ""),
-                )
-                scrape_ids.append(scrape_id)
+        # Check-then-insert must be atomic; otherwise two requests can both start.
+        with self.lock:
+            if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1", (project_id,)):
+                raise ValueError("当前项目已有竞品采集任务执行中，请等待完成。")
+            # Validate the entire request before creating any dossier or batch.
+            if hasattr(self._workbench, "competitor_service"):
+                prepared_dossiers = [(entry, self.competitor_service.upsert(project_id, {
+                    **entry, "title": selection.get("title") or entry["app_id"], "role": selection.get("role") or "", "note": selection.get("note") or ""}),
+                    selection, listing, screenshots, reviews) for entry, _, selection, listing, screenshots, reviews in prepared_dossiers]
+            stamp = now()
+            scrape_ids = []
+            with self.db() as db:
+                for entry, competitor, selection, listing, screenshots, reviews in prepared_dossiers:
+                    scrape_id = uid()
+                    request = {
+                        **entry,
+                        "countries": countries,
+                        "requested_countries": requested_countries,
+                        "collection_scope": "global_multi_market" if "global" in requested_countries else "selected_markets",
+                        "count_per_country": min(100, count) if entry["platform"] == "app_store" else count,
+                        "sort": sort,
+                        "date_from": date_from,
+                        "date_to": date_to,
+                        "version_id": product_version["id"] if product_version else "",
+                        "collect_listing": listing or screenshots,
+                        "save_listing": listing,
+                        "download_screenshots": screenshots,
+                        "collect_reviews": reviews,
+                        "competitor_id": competitor["id"] if competitor else "",
+                        "translate": bool(payload.get("translate", True)) and reviews,
+                        "translation_batch_size": 20,
+                        "requires_confirmation": True,
+                        **review_filters,
+                    }
+                    if selection:
+                        request["selection"] = {key: selection[key] for key in ("platform", "app_id", "role", "note", "title", "query", "search_country", "lookup_country", "observed_countries") if key in selection}
+                    db.execute(
+                        "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                        (scrape_id, project_id, entry["platform"], entry["app_id"], json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", product_version["id"] if product_version else ""),
+                    )
+                    scrape_ids.append(scrape_id)
         worker = threading.Thread(target=self._run_collection_batch, args=(scrape_ids,), daemon=True)
         for scrape_id in scrape_ids:
             self.scrape_threads[scrape_id] = worker
@@ -603,15 +605,17 @@ class ReviewScraperAdapter(BoundService):
         old = self.scrape(scrape_id)
         if old["status"] not in {"failed", "empty", "cancelled"}:
             raise ValueError("只有失败、空结果或已取消的采集可以重试。")
-        if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1", (old["project_id"],)):
-            raise ValueError("当前项目已有竞品采集任务执行中，请等待完成。")
-        request = json.loads(old.get("request") or "{}")
-        new_id, stamp = uid(), now()
-        with self.db() as db:
-            db.execute(
-                "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (new_id, old["project_id"], old["platform"], old["app_id"], json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", old.get("version_id", "")),
-            )
+        # Check-then-insert must be atomic; otherwise two requests can both start.
+        with self.lock:
+            if self.rows("SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1", (old["project_id"],)):
+                raise ValueError("当前项目已有竞品采集任务执行中，请等待完成。")
+            request = json.loads(old.get("request") or "{}")
+            new_id, stamp = uid(), now()
+            with self.db() as db:
+                db.execute(
+                    "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (new_id, old["project_id"], old["platform"], old["app_id"], json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", old.get("version_id", "")),
+                )
         worker = threading.Thread(target=self._run_review_scrape, args=(new_id,), daemon=True)
         self.scrape_threads[new_id] = worker
         worker.start()
@@ -911,37 +915,39 @@ class ReviewScraperAdapter(BoundService):
         if date_from and date_to and date_from > date_to:
             raise ValueError("开始日期不能晚于结束日期。")
         review_filters = self._review_filter_request(payload)
-        active = self.rows(
-            "SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1",
-            (project_id,),
-        )
-        if active:
-            raise ValueError("当前项目已有评论采集任务执行中，请等待完成。")
-        request = {
-            "platform": platform,
-            "app_id": app_id,
-            "countries": countries,
-            "count_per_country": count,
-            "sort": sort,
-            "date_from": date_from,
-            "date_to": date_to,
-            "version_id": product_version["id"] if product_version else "",
-            "translate": bool(payload.get("translate", False)),
-            "translation_batch_size": 20,
-            **review_filters,
-        }
-        if hasattr(self._workbench, "competitor_service"):
-            competitor = self.competitor_service.upsert(project_id, {"platform": platform, "app_id": app_id})
-            if competitor.get("archived"):
-                raise ValueError("该竞品已归档，请先恢复档案再采集。")
-            request["competitor_id"] = competitor["id"]
-        scrape_id = uid()
-        stamp = now()
-        with self.db() as db:
-            db.execute(
-                "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-                (scrape_id, project_id, platform, app_id, json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", product_version["id"] if product_version else ""),
+        # Check-then-insert must be atomic; otherwise two requests can both start.
+        with self.lock:
+            active = self.rows(
+                "SELECT id FROM scrapes WHERE project_id=? AND status IN ('queued','running') LIMIT 1",
+                (project_id,),
             )
+            if active:
+                raise ValueError("当前项目已有评论采集任务执行中，请等待完成。")
+            request = {
+                "platform": platform,
+                "app_id": app_id,
+                "countries": countries,
+                "count_per_country": count,
+                "sort": sort,
+                "date_from": date_from,
+                "date_to": date_to,
+                "version_id": product_version["id"] if product_version else "",
+                "translate": bool(payload.get("translate", False)),
+                "translation_batch_size": 20,
+                **review_filters,
+            }
+            if hasattr(self._workbench, "competitor_service"):
+                competitor = self.competitor_service.upsert(project_id, {"platform": platform, "app_id": app_id})
+                if competitor.get("archived"):
+                    raise ValueError("该竞品已归档，请先恢复档案再采集。")
+                request["competitor_id"] = competitor["id"]
+            scrape_id = uid()
+            stamp = now()
+            with self.db() as db:
+                db.execute(
+                    "INSERT INTO scrapes(id,project_id,platform,app_id,request,status,result_doc_id,created,updated,error,version_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (scrape_id, project_id, platform, app_id, json.dumps(request, ensure_ascii=False), "queued", "", stamp, stamp, "", product_version["id"] if product_version else ""),
+                )
         worker = threading.Thread(target=self._run_review_scrape, args=(scrape_id,), daemon=True)
         self.scrape_threads[scrape_id] = worker
         worker.start()
@@ -955,6 +961,22 @@ class ReviewScraperAdapter(BoundService):
             db.execute(f"UPDATE scrapes SET {assignments} WHERE id=?", (*values.values(), scrape_id))
         if values.get("status") in {"ready", "completed"} and hasattr(self._workbench, "competitor_service"):
             self.competitor_service.bind_scrape(self.rows("SELECT * FROM scrapes WHERE id=?", (scrape_id,))[0])
+
+    def _update_active_scrape(self, scrape_id, **values):
+        """Write worker progress only while the scrape is still active.
+
+        A user cancel flips the row to ``cancelled`` at any time; an
+        unconditional worker write would silently revive it.
+        """
+        assignments = ",".join(f"{key}=?" for key in values)
+        with self.db() as db:
+            changed = db.execute(
+                f"UPDATE scrapes SET {assignments} WHERE id=? AND status IN ('queued','running')",
+                (*values.values(), scrape_id),
+            ).rowcount
+        if changed and values.get("status") in {"ready", "completed"} and hasattr(self._workbench, "competitor_service"):
+            self.competitor_service.bind_scrape(self.rows("SELECT * FROM scrapes WHERE id=?", (scrape_id,))[0])
+        return bool(changed)
 
     def _run_review_scrape(self, scrape_id):
         process = None
@@ -974,7 +996,8 @@ class ReviewScraperAdapter(BoundService):
             if request.get("collect_listing"):
                 request["output_dir"] = str((directory / "screenshots").resolve())
             (directory / "request.json").write_text(json.dumps(request, ensure_ascii=False, indent=2), encoding="utf-8")
-            self._update_scrape(scrape_id, status="running", updated=now(), error="")
+            if not self._update_active_scrape(scrape_id, status="running", updated=now(), error=""):
+                return
             command = [settings["python"], str(HERE / "review_scraper_worker.py")]
             env = os.environ.copy()
             env["PYTHONUNBUFFERED"] = "1"
@@ -993,9 +1016,10 @@ class ReviewScraperAdapter(BoundService):
             )
             with self.lock:
                 self.scrape_processes[scrape_id] = process
-                if self.scrape(scrape_id)["status"] == "cancelled":
-                    self.stop_process(process)
-                    return
+                cancelled = self.scrape(scrape_id)["status"] == "cancelled"
+            if cancelled:
+                self.stop_process(process)
+                return
             stdout, stderr = process.communicate(json.dumps(request, ensure_ascii=False).encode("utf-8"), timeout=1800)
             current = self.scrape(scrape_id)
             if current["status"] == "cancelled":
@@ -1013,7 +1037,7 @@ class ReviewScraperAdapter(BoundService):
                 warnings = (result.get("warnings") or []) if isinstance(result, dict) else []
                 warning = "；".join(str(item) for item in warnings if str(item).strip())
                 if not manifest:
-                    self._update_scrape(
+                    self._update_active_scrape(
                         scrape_id,
                         status="empty",
                         updated=now(),
@@ -1024,7 +1048,7 @@ class ReviewScraperAdapter(BoundService):
                     return
                 if not reviews and request.get("collect_reviews", True):
                     warning = "；".join(filter(None, [warning, "没有采集到评论；商店资料仍可确认入库"]))
-                self._update_scrape(
+                self._update_active_scrape(
                     scrape_id,
                     status="ready",
                     updated=now(),
@@ -1035,11 +1059,13 @@ class ReviewScraperAdapter(BoundService):
                 return
             if not isinstance(reviews, list) or not reviews:
                 warning = "；".join(str(item) for item in (result.get("warnings") or []) if str(item).strip()) if isinstance(result, dict) else ""
-                self._update_scrape(scrape_id, status="empty", updated=now(), error=warning or "没有采集到评论，未写入资料。", review_count=0, warning_count=len(result.get("warnings") or []) if isinstance(result, dict) else 0)
+                self._update_active_scrape(scrape_id, status="empty", updated=now(), error=warning or "没有采集到评论，未写入资料。", review_count=0, warning_count=len(result.get("warnings") or []) if isinstance(result, dict) else 0)
                 return
             csv_content = self._review_csv(reviews)
             if len(csv_content) > MAX_FILE:
                 raise ValueError("评论 CSV 超过 12 MB，请减少国家数量或每国条数后重试。")
+            if self.scrape(scrape_id)["status"] == "cancelled":
+                return
             stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
             safe_app_id = self._safe_export_name(scrape["app_id"])[:60]
             document = self.add_document(
@@ -1050,7 +1076,7 @@ class ReviewScraperAdapter(BoundService):
                 "review-evidence",
             )
             warning = "；".join(str(item) for item in (result.get("warnings") or []) if str(item).strip()) if isinstance(result, dict) else ""
-            self._update_scrape(
+            self._update_active_scrape(
                 scrape_id,
                 status="completed",
                 result_doc_id=document["id"],
@@ -1062,14 +1088,9 @@ class ReviewScraperAdapter(BoundService):
         except subprocess.TimeoutExpired:
             if process is not None:
                 self.stop_process(process)
-            if self.scrape(scrape_id)["status"] != "cancelled":
-                self._update_scrape(scrape_id, status="failed", updated=now(), error="评论采集超过 30 分钟，已停止。")
+            self._update_active_scrape(scrape_id, status="failed", updated=now(), error="评论采集超过 30 分钟，已停止。")
         except Exception as exc:  # noqa: BLE001 - persisted for UI visibility
-            try:
-                if self.scrape(scrape_id)["status"] != "cancelled":
-                    self._update_scrape(scrape_id, status="failed", updated=now(), error=str(exc)[:1000])
-            except ValueError:
-                pass
+            self._update_active_scrape(scrape_id, status="failed", updated=now(), error=str(exc)[:1000])
         finally:
             with self.lock:
                 self.scrape_processes.pop(scrape_id, None)
@@ -1088,6 +1109,8 @@ class ReviewScraperAdapter(BoundService):
                 raise ValueError("当前评论采集任务不能取消。")
             self._update_scrape(scrape_id, status="cancelled", updated=now(), error="已由用户取消。")
             process = self.scrape_processes.get(scrape_id)
-            if process is not None:
-                self.stop_process(process)
+        # Stopping can block for seconds (taskkill/wait); never hold the
+        # shared lock while doing it.
+        if process is not None:
+            self.stop_process(process)
         return self.scrape(scrape_id)

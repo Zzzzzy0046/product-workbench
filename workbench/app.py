@@ -401,8 +401,11 @@ class Workbench:
                 document["versions"] = links_by_document.get(document["id"], [])
             result["competitors"] = self.competitor_service.list(project_id)["competitors"]
             result["competitor_document_links"] = self.competitor_service.document_links(project_id)
+            competitor_links_by_document = {}
+            for link in result["competitor_document_links"]:
+                competitor_links_by_document.setdefault(link["document_id"], []).append(link)
             for document in result["documents"]:
-                associations = [link for link in result["competitor_document_links"] if link["document_id"] == document["id"]]
+                associations = competitor_links_by_document.get(document["id"], [])
                 document["competitor_ids"] = [link["competitor_id"] for link in associations]
                 document["competitor_material_types"] = {link["competitor_id"]: link["material_type"] for link in associations}
             result["scrapes"] = self.scrapes(project_id)

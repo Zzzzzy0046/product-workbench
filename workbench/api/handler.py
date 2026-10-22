@@ -1,8 +1,34 @@
 """HTTP handler preserving the workbench's existing local API contract."""
 
+import logging
+import logging.handlers
+
 from workbench.core.runtime import *
 from workbench.api.routes import dispatch_get, dispatch_post
 from workbench.api.serializers import attachment_header, encode_body
+
+
+CLIENT_DISCONNECTS = (ConnectionAbortedError, BrokenPipeError, ConnectionResetError)
+_LOGGERS = {}
+_LOGGERS_LOCK = threading.Lock()
+
+
+def error_logger(data_dir):
+    """Return a rotating file logger under ``<data>/logs/workbench.log``."""
+    log_dir = (Path(data_dir) / "logs").resolve()
+    key = str(log_dir)
+    with _LOGGERS_LOCK:
+        logger = _LOGGERS.get(key)
+        if logger is None:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            logger = logging.getLogger(f"workbench.http.{len(_LOGGERS)}")
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+            handler = logging.handlers.RotatingFileHandler(log_dir / "workbench.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")
+            handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+            logger.addHandler(handler)
+            _LOGGERS[key] = logger
+        return logger
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -17,16 +43,35 @@ class Handler(BaseHTTPRequestHandler):
 
     def respond(self, data, status=200, content_type="application/json; charset=utf-8", filename=None):
         body = encode_body(data, content_type)
-        self.send_response(status)
-        self.send_header("Content-Type",content_type)
-        self.send_header("Content-Length",str(len(body)))
-        self.send_header("X-Content-Type-Options","nosniff")
-        self.send_header("Cache-Control","no-store")
-        self.send_header("Content-Security-Policy","default-src 'self'; img-src 'self' blob: https://play-lh.googleusercontent.com https://lh3.googleusercontent.com https://*.mzstatic.com; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
-        if filename:
-            self.send_header("Content-Disposition", attachment_header(filename))
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type",content_type)
+            self.send_header("Content-Length",str(len(body)))
+            self.send_header("X-Content-Type-Options","nosniff")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Security-Policy","default-src 'self'; img-src 'self' blob: https://play-lh.googleusercontent.com https://lh3.googleusercontent.com https://*.mzstatic.com; style-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'")
+            if filename:
+                self.send_header("Content-Disposition", attachment_header(filename))
+            self.end_headers()
+            self.wfile.write(body)
+        except CLIENT_DISCONNECTS:
+            # The browser navigated away or the poll was aborted.
+            self.close_connection = True
+
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except CLIENT_DISCONNECTS:
+            self.close_connection = True
+
+    def log_server_error(self):
+        data_dir = getattr(getattr(self.server, "app", None), "data", None)
+        if data_dir is None:
+            return
+        try:
+            error_logger(data_dir).exception("%s %s failed", self.command, self.path)
+        except OSError:
+            pass
 
     def valid_host(self):
         return self.headers.get("Host", "") in {f"127.0.0.1:{self.server.server_port}", f"localhost:{self.server.server_port}"}
@@ -38,9 +83,13 @@ class Handler(BaseHTTPRequestHandler):
         query = parse_qs(parsed.query)
         try:
             return dispatch_get(self, parsed, query)
+        except CLIENT_DISCONNECTS:
+            self.close_connection = True
+            return None
         except ValueError as exc:
             return self.respond({"error":str(exc)},400)
         except Exception:
+            self.log_server_error()
             return self.respond({"error":"读取失败，请检查服务配置。"},500)
 
     def do_POST(self):
@@ -56,7 +105,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond({"error":"请求过大或为空。"},413)
             payload = json.loads(self.rfile.read(length))
             return dispatch_post(self, path, payload)
+        except CLIENT_DISCONNECTS:
+            self.close_connection = True
+            return None
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             return self.respond({"error":str(exc) if isinstance(exc,ValueError) else "请求字段无效。"},400)
         except Exception:
+            self.log_server_error()
             return self.respond({"error":"操作失败，请检查文件与服务配置。"},500)

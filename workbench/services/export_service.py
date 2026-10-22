@@ -606,7 +606,7 @@ class ExportService(BoundService):
             with self.db() as db:
                 db.execute(
                     "INSERT INTO projects(id,name,brief,created,workflow_mode,platform,team,timebox) VALUES(?,?,?,?,?,?,?,?)",
-                    (new_project_id, str(project.get("name", "导入项目"))[:100], str(project.get("brief", ""))[:12000], project.get("created", now()), workflow_mode, platform, "", ""),
+                    (new_project_id, str(project.get("name", "导入项目"))[:100], str(project.get("brief", ""))[:12000], project.get("created", now()), workflow_mode, platform, str(project.get("team", "") or "")[:1000], str(project.get("timebox", "") or "")[:80]),
                 )
                 for item in collections["product_versions"]:
                     old_id = str(item.get("id", ""))

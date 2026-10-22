@@ -1070,6 +1070,35 @@ class JobService(BoundService):
         item = self.version(job_id,version)
         return self.edit_output(job_id,item["output"],f"恢复自版本 V{item['version']}","restore")
 
+    def _revision_document_ids(self, old):
+        """Reuse the original job's explicit evidence so validation sees the same inputs."""
+        try:
+            snapshot = json.loads((self.data / "runs" / old["id"] / "执行记录.json").read_text(encoding="utf-8"))
+        except (OSError,ValueError,TypeError):
+            snapshot = {}
+        selected = snapshot.get("selected_document_ids") if isinstance(snapshot, dict) else None
+        # Imported snapshots keep pre-import IDs; the job's source list is
+        # remapped on import, so its uploads are the fallback evidence.
+        uploads = [
+            source.get("source_id") for source in old.get("sources") or []
+            if isinstance(source, dict) and source.get("kind") == "upload"
+        ]
+        for values in (selected if isinstance(selected, list) else [], uploads):
+            candidates = list(dict.fromkeys(value for value in values if isinstance(value, str) and value))
+            if not candidates:
+                continue
+            placeholders = ",".join("?" for _ in candidates)
+            existing = {
+                row["id"] for row in self.rows(
+                    f"SELECT id FROM documents WHERE project_id=? AND kind IN ('upload','accepted','deliverable') AND id IN ({placeholders})",
+                    (old["project_id"],*candidates),
+                )
+            }
+            valid = [value for value in candidates if value in existing][:12]
+            if valid:
+                return valid
+        return []
+
     def prepare_revision(self, old, prompt, reason, record_fields=None):
         sources, nested_maps = self.normalize_sources(old["project_id"],old["sources"])
         dominant_map = max(nested_maps.values(),key=len,default={})
@@ -1098,6 +1127,7 @@ class JobService(BoundService):
             old["project_id"],
             old["task_id"],
             f"准备 {old['title']} 的修订任务。",
+            self._revision_document_ids(old) or None,
             version_id=old.get("version_id", ""),
         )
         revision_number = int(old.get("revision_number",1) or 1) + 1
@@ -1241,8 +1271,11 @@ class JobService(BoundService):
                 raise ValueError("任务当前不能取消。")
             with self.db() as db:
                 db.execute("UPDATE jobs SET status='cancelled',updated=? WHERE id=?", (now(),job_id))
-            if job_id in self.processes:
-                self.stop_process(self.processes[job_id])
+            process = self.processes.get(job_id)
+        # Stopping can block for seconds (taskkill/wait); never hold the
+        # shared lock while doing it.
+        if process is not None:
+            self.stop_process(process)
         return self.job(job_id)
 
     def restore_cancelled(self, job_id):
