@@ -220,6 +220,8 @@ def validate(
             "fast/f1-flow-monetization": [
                 ("flow", ("主要流程", "核心任务流程", "再次使用流程"), "产品主要流程"),
                 ("monetization", ("商业化", "Subscription", "IAP", "Ads"), "商业化方案"),
+                ("ad-placements", ("广告位方案", "首版广告位"), "首版广告位方案表"),
+                ("payback", ("回本假设",), "回本假设与验证"),
                 ("handoff", ("进入 PRD", "F2 需要", "PRD 交接", "下一步交接", "原型设计输入", "本轮交接"), "本轮下一步交接范围"),
             ],
         }

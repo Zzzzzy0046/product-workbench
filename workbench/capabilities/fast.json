@@ -77,7 +77,7 @@
       "knowledge_ids": ["method-new-product-analysis", "template-f1-new-product-analysis", "case-heart-rate-template-evolution"],
       "max_chars": 3000,
       "hidden": true,
-      "chapter_scope": "只基于已确认的品类用户和竞品差异给出本产品的定位、价值和 V0 范围；每个方案结论使用建议性措辞。",
+      "chapter_scope": "只基于已确认的品类用户和竞品差异给出本产品的定位、价值和 V0 范围；范围取舍直接写采用、后置或不做，并写一句理由。",
       "required_upstream_all": ["fast/f1-category-user", "fast/f1-competitor-differences"],
       "modes": ["fast"]
     },
@@ -105,9 +105,9 @@
       "tools": ["project-search", "knowledge-search", "document-parser", "codex"],
       "query": "新品 主要流程 首次使用 核心任务 再次使用 订阅 IAP 广告 商业化 F2 PRD 交接",
       "knowledge_ids": ["method-new-product-analysis", "template-f1-new-product-analysis", "case-heart-rate-template-evolution"],
-      "max_chars": 3000,
+      "max_chars": 4500,
       "hidden": true,
-      "chapter_scope": "只写本项目主要流程、产品内商业化方案和本轮下一步交接，范围引用第 6 章不重复；不预设广告与核心价值的先后，不强制下一步为完整 F2，不展开投放、发布或全量异常状态。",
+      "chapter_scope": "只写本项目主要流程、产品内商业化方案和本轮下一步交接，范围引用第 6 章不重复；商业化必须给出首版广告位方案表，不强制下一步为完整 F2，不展开投放、发布或全量异常状态。",
       "required_upstream_all": ["fast/f1-positioning-scope", "fast/f1-product-solution"],
       "modes": ["fast"]
     },
